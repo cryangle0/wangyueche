@@ -2,6 +2,9 @@ window.I18N = {
   zh: {
     brand: "Apron",
     brandSub: "美国机场接送 · 预约调度",
+    gMorning: "早上好",
+    gAfternoon: "下午好",
+    gEvening: "晚上好",
     heroTitle: "航班落地，车已在廊桥外。",
     heroBody: "按美国当地时区预约专车。客服调度，不是路边抢单。免费等候从实际落地起算，超时需乘客确认，No-show 留证据链。",
     fidsH1: "航班", fidsH2: "航站", fidsH3: "状态", fidsH4: "等候",
@@ -345,6 +348,9 @@ window.I18N = {
   en: {
     brand: "Apron",
     brandSub: "US airport transfer · booked dispatch",
+    gMorning: "Good morning",
+    gAfternoon: "Good afternoon",
+    gEvening: "Good evening",
     heroTitle: "Wheels on the curb when the wheels are on the ground.",
     heroBody: "Book in US local time. Dispatchers assign cars — drivers do not swarm the curb. Free wait starts at actual landing. Overtime needs rider confirmation. No-shows keep an evidence pack.",
     fidsH1: "FLIGHT", fidsH2: "TERM", fidsH3: "STATUS", fidsH4: "WAIT",
@@ -688,6 +694,9 @@ window.I18N = {
   es: {
     brand: "Apron",
     brandSub: "Traslado aeropuerto EE. UU. · despacho con reserva",
+    gMorning: "Buenos días",
+    gAfternoon: "Buenas tardes",
+    gEvening: "Buenas noches",
     heroTitle: "El auto en la acera cuando el avión toca tierra.",
     heroBody: "Reserve en hora local de EE. UU. El despachador asigna; no hay puja en la acera. La espera gratis empieza en el aterrizaje real. El tiempo extra lo confirma el pasajero. Los no-show dejan evidencia.",
     fidsH1: "VUELO", fidsH2: "TERM", fidsH3: "ESTADO", fidsH4: "ESPERA",

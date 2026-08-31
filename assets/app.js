@@ -276,6 +276,46 @@
   function chips(list, key, val) {
     return `<div class="chips">${list.map((id) => `<button type="button" class="chip ${val === id ? "on" : ""}" data-action="set-form" data-k="${key}" data-v="${id}">${esc(t(id))}</button>`).join("")}</div>`;
   }
+  function initials(name) {
+    return String(name || "?").split(/\s+/).map((w) => w[0]).slice(0, 2).join("").toUpperCase();
+  }
+  function avatar(name, cls) {
+    return `<span class="avatar ${cls || ""}">${esc(initials(name))}</span>`;
+  }
+  function ico(name) {
+    const stroke = 'stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"';
+    const pack = {
+      book: `<svg viewBox="0 0 24 24" ${stroke}><path d="M12 21s7-5.2 7-11a7 7 0 1 0-14 0c0 5.8 7 11 7 11z"/><circle cx="12" cy="10" r="2.2"/></svg>`,
+      orders: `<svg viewBox="0 0 24 24" ${stroke}><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M8 9h8M8 12h8M8 15h5"/></svg>`,
+      inbox: `<svg viewBox="0 0 24 24" ${stroke}><path d="M4 7h16v10H4z"/><path d="M4 7l8 6 8-6"/></svg>`,
+      me: `<svg viewBox="0 0 24 24" ${stroke}><circle cx="12" cy="8" r="3"/><path d="M5 19c1.4-3 3.6-4.5 7-4.5S17.6 16 19 19"/></svg>`,
+      work: `<svg viewBox="0 0 24 24" ${stroke}><rect x="3" y="4" width="8" height="7" rx="1.5"/><rect x="13" y="4" width="8" height="7" rx="1.5"/><rect x="3" y="13" width="8" height="7" rx="1.5"/><rect x="13" y="13" width="8" height="7" rx="1.5"/></svg>`,
+      dispatch: `<svg viewBox="0 0 24 24" ${stroke}><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2"/></svg>`,
+      monitor: `<svg viewBox="0 0 24 24" ${stroke}><path d="M4 6h16v10H4z"/><path d="M8 20h8M12 16v4"/><circle cx="12" cy="11" r="2"/></svg>`,
+      shift: `<svg viewBox="0 0 24 24" ${stroke}><path d="M4 18V8l4 4 4-6 4 8 4-4v8z"/></svg>`,
+      car: `<svg viewBox="0 0 24 24" ${stroke}><path d="M4 14l2-5h12l2 5"/><path d="M4 14h16v3H4z"/><circle cx="7.5" cy="17.5" r="1.4"/><circle cx="16.5" cy="17.5" r="1.4"/></svg>`,
+      van: `<svg viewBox="0 0 24 24" ${stroke}><path d="M3 14V9h10l5 5H3z"/><path d="M3 14h18v3H3z"/><circle cx="7" cy="17.5" r="1.3"/><circle cx="16.5" cy="17.5" r="1.3"/></svg>`,
+      send: `<svg viewBox="0 0 24 24" ${stroke}><path d="M4 12l16-8-6 16-2.5-6.5L4 12z"/></svg>`,
+    };
+    return pack[name] || pack.car;
+  }
+  function greet() {
+    const h = Number(new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "numeric", hour12: false }).format(now()));
+    return h < 12 ? t("gMorning") : h < 18 ? t("gAfternoon") : t("gEvening");
+  }
+  function pageHead(title, sub) {
+    return `<header class="app-head"><p class="eyebrow">${esc(sub || greet())}</p><h2 class="page-title">${esc(title)}</h2></header>`;
+  }
+  function emptyBox() {
+    return `<div class="empty">${ico("orders")}<p>${esc(t("none"))}</p></div>`;
+  }
+  function vehiclePicker(val) {
+    return `<div class="veh-row">${VEHICLES.map((v) => `<button type="button" class="veh ${val === v.id ? "on" : ""}" data-action="set-form" data-k="vehicle" data-v="${v.id}">
+      <span class="veh-mark">${ico(v.id === "van" ? "van" : "car")}</span>
+      <b>${esc(t(v.id))}</b>
+      <small>${v.seats} ${t("paxUnit")} · ${v.bags} ${t("bagUnit")}</small>
+    </button>`).join("")}</div>`;
+  }
   function mapHtml(from, to, extra) {
     const x = extra || {};
     const h = x.h || 220;
@@ -293,15 +333,18 @@
     const land = f.actual || f.sched;
     return `<div class="fids-row"><span>${esc(code)}</span><span>${esc(f.term)}</span><span class="${stt}">${esc(f.status.replace("_", " ")).toUpperCase()}</span><span>${fmtTime(land, "la")}</span></div>`;
   }
-  function orderCard(o, who) {
-    return `<button type="button" class="card" data-action="open-order" data-id="${o.id}" style="width:100%;text-align:left">
-      <div class="card-hd"><b>${esc(o.id)}</b><span class="tag ${tagClass(o.status)}">${esc(st(o.status))}</span></div>
-      <div class="kv">
-        <div><span>${t("from")}</span><b>${esc(addrName(o.from))}</b></div>
-        <div><span>${t("to")}</span><b>${esc(addrName(o.to))}</b></div>
-        ${o.flight ? `<div><span>${t("flight")}</span><b>${esc(o.flight)} · ${fmtTime((db.flights[o.flight] || {}).actual || (db.flights[o.flight] || {}).sched, o.city)}</b></div>` : ""}
-        <div><span>${t("when")}</span><b>${fmtTime(o.when, o.city)}</b></div>
-        <div><span>${t("total")}</span><b class="num">${money(o.fare.total)}</b></div>
+  function orderCard(o) {
+    const fl = o.flight && db.flights[o.flight];
+    return `<button type="button" class="card trip-card" data-action="open-order" data-id="${o.id}">
+      <div class="spine"><i class="dot from"></i><i class="line"></i><i class="dot to"></i></div>
+      <div class="trip-mid">
+        <b>${esc(addrName(o.from))}</b>
+        <span class="muted">${esc(addrName(o.to))}</span>
+        <span class="trip-meta">${o.flight ? `${esc(o.flight)} · ` : ""}${fmtTime(o.when, o.city)}${fl ? ` · ${fl.status.replace("_", " ")}` : ""}</span>
+      </div>
+      <div class="trip-side">
+        <span class="tag ${tagClass(o.status)}">${esc(st(o.status))}</span>
+        <b class="num">${money(o.fare.total)}</b>
       </div>
     </button>`;
   }
@@ -314,32 +357,39 @@
     const est = estimateForm();
     const blocked = ui.form.city === "ch";
     const hits = (window.ApronMap ? ApronMap.search(ui.form.q, ui.form.city) : cityIds(ui.form.city));
-    return `<div class="mini-scroll map-mode">${mapHtml(ui.form.from, ui.form.to, { h: 210, pickable: true, mode: "route" })}
+    return `<div class="mini-scroll map-mode">
+      <div class="map-stage">${mapHtml(ui.form.from, ui.form.to, { h: 292, pickable: true, mode: "route" })}
+        <div class="map-float"><div class="seg">${["la", "ny", "mia", "ch"].map((c) => `<button class="${ui.form.city === c ? "on" : ""}" data-action="set-city" data-v="${c}">${esc(t("city" + ({ la: "LA", ny: "NY", mia: "MI", ch: "CH" }[c])))}</button>`).join("")}</div></div>
+      </div>
       <div class="sheet"><div class="sheet-handle"></div>
-        <div class="seg">${["la", "ny", "mia", "ch"].map((c) => `<button class="${ui.form.city === c ? "on" : ""}" data-action="set-city" data-v="${c}">${esc(t("city" + ({ la: "LA", ny: "NY", mia: "MI", ch: "CH" }[c])))}</button>`).join("")}</div>
         ${blocked ? `<p class="hint" style="color:var(--coral)">${t("cityBlocked")}</p>` : ""}
-        <div class="field"><label>${t("searchAddr")}</label><input class="field-input" data-form="q" value="${esc(ui.form.q || "")}" placeholder="${esc(t("searchPlace"))}" /></div>
-        <div class="chips">${hits.map((id) => `<button class="chip ${ui.form.from === id || ui.form.to === id ? "on" : ""}" data-action="use-place" data-v="${id}">${esc(addrName(id))}</button>`).join("")}</div>
-        <p class="hint">${t("pickOnMap")}</p>
-        <div class="addr-row"><i class="dot from"></i><select class="field-select" data-form="from">${optAddr(ui.form.from, ui.form.city)}</select></div>
-        <div class="addr-row"><i class="dot to"></i><select class="field-select" data-form="to">${optAddr(ui.form.to, ui.form.city)}</select></div>
+        <div class="search-pill"><input class="field-input" data-form="q" value="${esc(ui.form.q || "")}" placeholder="${esc(t("searchPlace"))}" /></div>
+        <div class="chips slim">${hits.map((id) => `<button class="chip ${ui.form.from === id || ui.form.to === id ? "on" : ""}" data-action="use-place" data-v="${id}">${esc(addrName(id))}</button>`).join("")}</div>
+        <div class="route-pick">
+          <div class="spine tall"><i class="dot from"></i><i class="line"></i><i class="dot to"></i></div>
+          <div>
+            <select class="field-select" data-form="from">${optAddr(ui.form.from, ui.form.city)}</select>
+            <select class="field-select" data-form="to">${optAddr(ui.form.to, ui.form.city)}</select>
+          </div>
+        </div>
         <div class="chips">
           <button class="chip" data-action="set-form" data-k="from" data-v="home">${t("home")}</button>
           <button class="chip" data-action="set-form" data-k="from" data-v="work">${t("work")}</button>
           <button class="chip" data-action="set-form" data-k="from" data-v="lax">${t("lax")}</button>
         </div>
         <div class="field"><label>${t("flight")}</label><input class="field-input" data-form="flight" value="${esc(ui.form.flight || "")}" placeholder="UA456" /></div>
-        ${ui.form.flight && db.flights[ui.form.flight] ? `<div class="fids-board" style="margin:0 0 10px">${fidsRow(ui.form.flight)}</div><p class="hint">${t("flightSrc")}</p>` : ""}
+        ${ui.form.flight && db.flights[ui.form.flight] ? `<div class="fids-board mini">${fidsRow(ui.form.flight)}</div>` : ""}
         <div class="field"><label>${t("when")}</label><input class="field-input" type="datetime-local" data-form="when" value="${esc(ui.form.when || "")}" /></div>
         <p class="hint">${t("tzNote")}</p>
         <label class="muted">${t("vehicle")}</label>
-        ${chips(["econ", "comfort", "luxe", "van"], "vehicle", ui.form.vehicle)}
+        ${vehiclePicker(ui.form.vehicle)}
         <div class="btn-row">
           <div class="field" style="flex:1"><label>${t("pax")}</label><input class="field-input" type="number" min="1" max="6" data-form="pax" value="${esc(ui.form.pax || 1)}" /></div>
           <div class="field" style="flex:1"><label>${t("bags")}</label><input class="field-input" type="number" min="0" max="8" data-form="bags" value="${esc(ui.form.bags || 0)}" /></div>
         </div>
         <div class="field"><label>${t("notes")}</label><input class="field-input" data-form="notes" placeholder="${esc(t("notesPh"))}" value="${esc(ui.form.notes || "")}" /></div>
-        ${est ? `<div class="card"><div class="card-hd"><b>${t("estimate")}</b><span class="num">${money(est.total)}</span></div>
+        ${est ? `<div class="fare-card">
+          <div class="card-hd"><span>${t("estimate")}</span><b class="num">${money(est.total)}</b></div>
           <div class="kv">
             <div><span>${t("mile")} · ${est.mi} ${t("mi")}</span><b>${money(est.mile)}</b></div>
             <div><span>${t("bookingFee")}</span><b>${money(est.booking)}</b></div>
@@ -347,8 +397,8 @@
             <div><span>${t("nightFee")}</span><b>${money(est.night)}</b></div>
           </div></div>` : ""}
         <label class="muted">${t("payWith")}</label>
-        <div class="pay-grid">${["stripe", "paypal", "wise", "revolut"].map((p) => `<button class="pay-opt ${ui.form.pay === p ? "on" : ""}" data-action="set-form" data-k="pay" data-v="${p}">${esc(t(p))}</button>`).join("")}</div>
-        <button type="button" class="btn btn-primary" style="margin-top:12px" data-action="submit-book">${t("submit")}</button>
+        <div class="pay-grid">${["stripe", "paypal", "wise", "revolut"].map((p) => `<button class="pay-opt ${ui.form.pay === p ? "on" : ""}" data-action="set-form" data-k="pay" data-v="${p}"><i class="pay-mark ${p}"></i>${esc(t(p))}</button>`).join("")}</div>
+        <button type="button" class="btn btn-primary cta" data-action="submit-book">${t("submit")}</button>
       </div></div>`;
   }
   function optAddr(cur, city) {
@@ -364,51 +414,48 @@
     const rows = db.orders.filter((o) => o.passengerId === "P1");
     const show = ui.filter === "all" ? rows : rows.filter((o) => ST_MAP[o.status] === ui.filter);
     const pendingRate = rows.filter((o) => o.status === "completed" && !o.rated);
-    return `<h2 class="page-title">${t("orders")}</h2>
-      ${pendingRate.length ? `<div class="card"><b>${t("reviewNow")}</b><p class="muted">${pendingRate[0].id}</p>
+    return `${pageHead(t("orders"), t("brandSub"))}
+      ${pendingRate.length ? `<div class="card offer"><div class="card-hd"><b>${t("reviewNow")}</b><span class="muted">${pendingRate[0].id}</span></div>
         <div class="btn-row"><button class="btn btn-navy" data-action="rate" data-id="${pendingRate[0].id}">${t("rate")}</button>
         <button class="btn btn-ghost" data-action="later-rate">${t("reviewLater")}</button></div></div>` : ""}
       <div class="seg wrap">${["all", "pendingDispatch", "toPickup", "waiting", "overtime", "inTrip", "done", "canceled", "noshow"].map((k) => `<button class="${ui.filter === k ? "on" : ""}" data-action="filter" data-v="${k}">${t(k)}</button>`).join("")}</div>
-      ${show.map((o) => orderCard(o, "p")).join("") || `<div class="empty">${t("none")}</div>`}`;
+      ${show.map((o) => orderCard(o)).join("") || emptyBox()}`;
   }
   function pagePInbox() {
     const tab = ui.inboxTab || "all";
     const msgs = db.messages.filter((m) => tab === "all" || m.kind === tab);
     const cs = db.chats.find((c) => c.with === "cs") || db.chats[0];
     const drv = db.chats.find((c) => c.with === "D1");
-    return `<h2 class="page-title">${t("inbox")}</h2>
+    return `${pageHead(t("inbox"), t("csMsg"))}
       <div class="seg">${["all", "sys", "order", "cs"].map((k) => `<button class="${tab === k ? "on" : ""}" data-action="inbox-tab" data-v="${k}">${t({ all: "all", sys: "sysMsg", order: "orderMsg", cs: "csMsg" }[k])}</button>`).join("")}</div>
-      ${msgs.map((m) => `<div class="card"><div class="card-hd"><b>${esc(m.title)}</b><span class="muted">${m.read ? "" : t("unread")}</span></div><p class="muted">${esc(m.body)}</p></div>`).join("")}
-      <div class="card"><div class="card-hd"><b>Ana</b><span class="tag tag-navy">${t("csMsg")}</span></div>
-        ${(cs.lines || []).map((l) => `<p class="bubble ${l.who === "p" ? "me" : ""}">${esc(l.txt)}</p>`).join("")}
-        <div class="btn-row"><input class="field-input" id="chat-in" placeholder="${esc(t("typeMsg"))}" /><button class="btn btn-navy" data-action="send-cs">${t("send")}</button></div>
+      ${msgs.map((m) => `<div class="msg-row"><span class="avatar sm">${m.kind === "cs" ? "CS" : m.kind === "order" ? "O" : "i"}</span><div><b>${esc(m.title)}</b><p class="muted">${esc(m.body)}</p></div><span class="muted">${m.read ? "" : t("unread")}</span></div>`).join("")}
+      <div class="chat-card">
+        <div class="chat-hd">${avatar("Ana Díaz")} <div><b>Ana Díaz</b><span class="muted">${t("csMsg")}</span></div></div>
+        <div class="chat-log">${(cs.lines || []).map((l) => `<p class="bubble ${l.who === "p" ? "me" : ""}">${esc(l.txt)}</p>`).join("")}</div>
+        <div class="composer"><input class="field-input" id="chat-in" placeholder="${esc(t("typeMsg"))}" /><button class="send-btn" data-action="send-cs">${ico("send")}</button></div>
       </div>
-      ${drv ? `<div class="card"><div class="card-hd"><b>${esc(drv.name)}</b><span class="tag tag-ok">${t("chatDriver")}</span></div>
-        ${(drv.lines || []).map((l) => `<p class="bubble ${l.who === "p" ? "me" : ""}">${esc(l.txt)}</p>`).join("")}
-        <div class="btn-row"><input class="field-input" id="chat-drv" placeholder="${esc(t("typeMsg"))}" /><button class="btn btn-navy" data-action="send-drv">${t("send")}</button></div>
+      ${drv ? `<div class="chat-card">
+        <div class="chat-hd">${avatar(drv.name)} <div><b>${esc(drv.name)}</b><span class="muted">${t("chatDriver")}</span></div></div>
+        <div class="chat-log">${(drv.lines || []).map((l) => `<p class="bubble ${l.who === "p" ? "me" : ""}">${esc(l.txt)}</p>`).join("")}</div>
+        <div class="composer"><input class="field-input" id="chat-drv" placeholder="${esc(t("typeMsg"))}" /><button class="send-btn" data-action="send-drv">${ico("send")}</button></div>
       </div>` : ""}`;
   }
   function pagePMe() {
     const p = db.passenger;
     const pays = db.payments || [];
-    return `<h2 class="page-title">${t("me")}</h2>
-      <div class="card kv">
-        <div><span>${t("name")}</span><b>${esc(p.nick || p.name)}</b></div>
-        <div><span>${t("email")}</span><b>${esc(p.email)}</b></div>
-        <div><span>${t("phone")}</span><b>${esc(p.phone)}</b></div>
-        <button class="btn btn-ghost" data-action="edit-profile">${t("editProfile")}</button>
-      </div>
+    return `<div class="profile-hero">${avatar(p.name, "lg")}<div><p class="eyebrow">${greet()}</p><h2>${esc(p.nick || p.name)}</h2><span class="muted">${esc(p.email)}</span></div></div>
+      <button class="cell" data-action="edit-profile"><span>${t("editProfile")}<small>${esc(p.phone)}</small></span><i>›</i></button>
       <div class="card"><b>${t("pay")}</b>${chips(["stripe", "paypal", "wise", "revolut"], "pay", p.pay)}
-        ${(pays).map((x) => `<div class="kv"><div><span>${esc(x.orderId)} · ${esc(x.channel)}</span><b>${money(x.amount)}</b></div></div>`).join("") || `<p class="muted">${t("none")}</p>`}
+        ${(pays).map((x) => `<div class="pay-line"><span>${esc(x.orderId)}</span><b>${money(x.amount)}</b></div>`).join("") || `<p class="muted">${t("none")}</p>`}
       </div>
       <div class="card"><b>${t("savedAddr")}</b>
         <div class="chips">${(p.saved || []).map((a) => `<button class="chip on" data-action="del-addr" data-v="${a}">${esc(addrName(a))} ×</button>`).join("")}</div>
         <div class="chips">${cityIds("la").filter((id) => !(p.saved || []).includes(id)).slice(0, 4).map((a) => `<button class="chip" data-action="add-addr" data-v="${a}">+ ${esc(addrName(a))}</button>`).join("")}</div>
       </div>
-      <div class="card"><b>${t("help")}</b>
-        <p><b>${t("faq1q")}</b><br/><span class="muted">${t("faq1a")}</span></p>
-        <p><b>${t("faq2q")}</b><br/><span class="muted">${t("faq2a")}</span></p>
-        <p><b>${t("faq3q")}</b><br/><span class="muted">${t("faq3a")}</span></p>
+      <div class="card faq"><b>${t("help")}</b>
+        <p><b>${t("faq1q")}</b><span class="muted">${t("faq1a")}</span></p>
+        <p><b>${t("faq2q")}</b><span class="muted">${t("faq2a")}</span></p>
+        <p><b>${t("faq3q")}</b><span class="muted">${t("faq3a")}</span></p>
       </div>
       <div class="card ccpa"><b>${t("ccpa")}</b><p>${t("ccpaBody")}</p>
         <button class="btn btn-ghost" data-action="delete-acct">${t("deleteAccount")}</button>
@@ -424,9 +471,11 @@
     const todayN = db.orders.filter((o) => o.driverId === d.id).length;
     const doneN = db.orders.filter((o) => o.driverId === d.id && o.status === "completed").length;
     const offer = mine.find((o) => o.status === "assigned" && !ui.offerSeen[o.id]);
-    return `<div class="card-hd"><h2 class="page-title">${t("workbench")}</h2>
-        <button class="chip ${d.online ? "on" : ""}" data-action="toggle-online">${d.online ? t("online") : t("offline")}</button></div>
-      ${offer ? `<div class="card offer"><div class="card-hd"><b>${t("newOffer")}</b><span class="tag tag-wait">${esc(offer.id)}</span></div>
+    return `<section class="drv-hero">
+        <div><p class="eyebrow">${greet()}</p><h2>${esc(d.name.split(" ")[0])}</h2><span class="muted">${esc(d.plate)} · ${t(d.level)}</span></div>
+        <button class="switch ${d.online ? "on" : ""}" data-action="toggle-online"><i></i><span>${d.online ? t("online") : t("offline")}</span></button>
+      </section>
+      ${offer ? `<div class="card offer pulse"><div class="card-hd"><b>${t("newOffer")}</b><span class="tag tag-wait">${esc(offer.id)}</span></div>
         <p class="muted">${esc(addrName(offer.from))} → ${esc(addrName(offer.to))} · ${esc(offer.flight || "—")}</p>
         <div class="btn-row"><button class="btn btn-primary" data-action="accept-o" data-id="${offer.id}">${t("accept")}</button>
         <button class="btn btn-ghost" data-action="reject-o" data-id="${offer.id}">${t("reject")}</button></div></div>` : ""}
@@ -440,32 +489,26 @@
         <button class="btn btn-navy" data-action="nav-home">${t("nav")}</button>
         <button class="btn btn-ghost" data-action="cs-drv">${t("cs")}</button>
       </div>
-      ${mine.map((o) => orderCard(o, "d")).join("") || `<div class="empty">${t("none")}</div>`}`;
+      ${mine.map((o) => orderCard(o)).join("") || emptyBox()}`;
   }
   function pageDOrders() {
     const d = myDriver();
     const rows = db.orders.filter((o) => o.driverId === d.id);
     const show = ui.filter === "all" ? rows : rows.filter((o) => ST_MAP[o.status] === ui.filter);
-    return `<h2 class="page-title">${t("orders")}</h2>
+    return `${pageHead(t("orders"), t("upcoming"))}
       <div class="seg wrap">${["all", "assigned", "toPickup", "waiting", "inTrip", "done", "canceled"].map((k) => `<button class="${ui.filter === k ? "on" : ""}" data-action="filter" data-v="${k}">${t(k)}</button>`).join("")}</div>
-      ${show.map((o) => orderCard(o, "d")).join("") || `<div class="empty">${t("none")}</div>`}`;
+      ${show.map((o) => orderCard(o)).join("") || emptyBox()}`;
   }
   function pageDInbox() {
-    return `<h2 class="page-title">${t("inbox")}</h2>
-      ${db.notices.map((n) => `<div class="card"><b>${esc(n.title)}</b><p class="muted">${esc(n.body)}</p><span class="tag tag-navy">${t("sysMsg")}</span></div>`).join("")}
-      ${db.messages.filter((m) => m.kind === "order").map((m) => `<div class="card"><b>${esc(m.title)}</b><p class="muted">${esc(m.body)}</p><span class="tag tag-wait">${t("orderMsg")}</span></div>`).join("")}`;
+    return `${pageHead(t("inbox"), t("sysMsg"))}
+      ${db.notices.map((n) => `<div class="msg-row">${avatar("Apron")}<div><b>${esc(n.title)}</b><p class="muted">${esc(n.body)}</p></div><span class="tag tag-navy">${t("sysMsg")}</span></div>`).join("")}
+      ${db.messages.filter((m) => m.kind === "order").map((m) => `<div class="msg-row"><span class="avatar sm">O</span><div><b>${esc(m.title)}</b><p class="muted">${esc(m.body)}</p></div></div>`).join("")}`;
   }
   function pageDMe() {
     const d = myDriver();
     const mine = db.orders.filter((o) => o.driverId === d.id && o.status === "completed");
     const month = mine.reduce((s, o) => s + o.fare.total * (1 - db.fees.commission), 0);
-    return `<h2 class="page-title">${t("me")}</h2>
-      <div class="card kv">
-        <div><span>${t("name")}</span><b>${esc(d.name)}</b></div>
-        <div><span>${t("level")}</span><b>${esc(t(d.level))}</b></div>
-        <div><span>${t("rating")}</span><b>${d.rating.toFixed(2)}</b></div>
-        <div><span>${t("plate")}</span><b>${esc(d.plate)} · ${esc(d.color)}</b></div>
-      </div>
+    return `<div class="profile-hero">${avatar(d.name, "lg")}<div><p class="eyebrow">${t(d.level)}</p><h2>${esc(d.name)}</h2><span class="muted">★ ${d.rating.toFixed(2)} · ${esc(d.plate)}</span></div></div>
       <div class="card"><b>${t("docs")}</b>
         <div class="kv">
           <div><span>${t("license")}</span><span class="tag tag-ok">${t("docsOk")}</span></div>
@@ -476,7 +519,7 @@
       <div class="card"><b>${t("bills")}</b>
         <div class="kv"><div><span>${t("dayBill")}</span><b>${money(d.earnings)}</b></div>
         <div><span>${t("monthBill")}</span><b>${money(month)}</b></div></div>
-        ${mine.map((o) => `<p class="muted">${esc(o.id)} · ${money(o.fare.total * (1 - db.fees.commission))} · ★${o.rating || "—"}</p>`).join("")}
+        ${mine.map((o) => `<p class="pay-line"><span>${esc(o.id)}</span><b>${money(o.fare.total * (1 - db.fees.commission))}</b></p>`).join("")}
       </div>
       <div class="card"><b>${t("withdraw")}</b><p class="hint">${t("zelleHint")}</p>
         <button class="btn btn-navy" data-action="withdraw">${t("withdraw")}</button>
@@ -489,9 +532,8 @@
       if (!ui.filter || ui.filter === "all") return ["pending_dispatch", "assigned", "to_pickup", "waiting", "overtime_confirm"].includes(o.status);
       return ST_MAP[o.status] === ui.filter;
     });
-    return `<h2 class="page-title">${t("dispatch")}</h2>
-      <p class="page-desc">${t("manualQ")}</p>
-      <div class="btn-row" style="margin-bottom:10px;flex-wrap:wrap">
+    return `${pageHead(t("dispatch"), t("manualQ"))}
+      <div class="btn-row tight">
         <button class="btn btn-navy" data-action="batch">${t("batch")}</button>
         <button class="btn btn-ghost" data-action="near">${t("near")}</button>
         <button class="btn btn-ghost" data-action="flight-re">${t("flightRe")}</button>
@@ -502,49 +544,58 @@
         const ranks = aiRank(o).slice(0, 3);
         const fl = o.flight && db.flights[o.flight];
         return `<div class="card">
-          <div class="card-hd"><b>${esc(o.id)}</b><span class="tag ${tagClass(o.status)}">${esc(st(o.status))}</span></div>
-          <p class="muted">${esc(addrName(o.from))} → ${esc(addrName(o.to))} · ${esc(o.flight || "—")} ${fl ? `· ${fl.status}` : ""} · ${fmtTime(o.when, o.city)}</p>
+          <button type="button" class="trip-card nested" data-action="open-order" data-id="${o.id}">
+            <div class="spine"><i class="dot from"></i><i class="line"></i><i class="dot to"></i></div>
+            <div class="trip-mid">
+              <b>${esc(addrName(o.from))}</b>
+              <span class="muted">${esc(addrName(o.to))}</span>
+              <span class="trip-meta">${esc(o.id)} · ${esc(o.flight || "—")}${fl ? ` · ${fl.status.replace("_", " ")}` : ""} · ${fmtTime(o.when, o.city)}</span>
+            </div>
+            <div class="trip-side"><span class="tag ${tagClass(o.status)}">${esc(st(o.status))}</span><b class="num">${money(o.fare.total)}</b></div>
+          </button>
           ${fl ? `<p class="hint">${t("actualLand")}: ${fmtTime(fl.actual || fl.sched, o.city)} · ${t("landingHow")}</p>` : ""}
           ${["pending_dispatch", "assigned"].includes(o.status) ? `<p class="muted">${t("ai")}</p>
           <div class="ai-list">${ranks.map((r) => `<div class="ai-item">
+            ${avatar(r.d.name)}
             <div><b>${esc(r.d.name)}</b> · ${t(r.d.level)} · ${r.score} ${t("score")}<div class="muted">${t("distance")} ${r.dist} mi · ${t(r.d.vehicle)} · ${!r.d.online ? t("off") : r.d.busy ? t("busy") : t("idle")}</div></div>
             <button class="btn btn-primary" style="height:34px;width:auto" data-action="assign" data-oid="${o.id}" data-did="${r.d.id}">${t("assign")}</button>
           </div>`).join("")}</div>` : ""}
           ${o.driverId && ["pending_dispatch", "assigned", "to_pickup"].includes(o.status) ? `<button class="btn btn-ghost" data-action="recall" data-id="${o.id}">${t("recall")}</button>` : ""}
         </div>`;
-      }).join("") || `<div class="empty">${t("none")}</div>`}`;
+      }).join("") || emptyBox()}`;
   }
   function pageCDrivers() {
-    return `<h2 class="page-title">${t("monitor")}</h2>
-      ${mapHtml("lax", "dtla", { mode: "fleet", h: 240 })}
-      ${db.drivers.map((d) => `<div class="card kv">
-        <div><span>${esc(d.name)}</span><span class="tag ${d.online ? (d.busy ? "tag-wait" : "tag-ok") : "tag-mist"}">${d.online ? (d.busy ? t("busy") : t("idle")) : t("off")}</span></div>
-        <div><span>${t("level")}</span><b>${t(d.level)}</b></div>
-        <div><span>${t("rating")}</span><b>${d.rating || "—"}</b></div>
-        <div><span>GPS</span><b>${d.lat ? `${d.lat.toFixed(3)}, ${d.lng.toFixed(3)}` : "—"}</b></div>
+    return `${pageHead(t("monitor"), t("onlineDrivers"))}
+      <div class="map-stage fleet">${mapHtml("lax", "dtla", { mode: "fleet", h: 228 })}</div>
+      ${db.drivers.map((d) => `<div class="msg-row">${avatar(d.name)}
+        <div><b>${esc(d.name)}</b><p class="muted">${t(d.level)} · ★ ${d.rating || "—"} · ${d.lat ? `${d.lat.toFixed(3)}, ${d.lng.toFixed(3)}` : "GPS —"}</p></div>
+        <span class="tag ${d.online ? (d.busy ? "tag-wait" : "tag-ok") : "tag-mist"}">${d.online ? (d.busy ? t("busy") : t("idle")) : t("off")}</span>
       </div>`).join("")}`;
   }
   function pageCInbox() {
     const cs = db.chats.find((c) => c.with === "cs") || db.chats[0];
-    return `<h2 class="page-title">${t("inbox")}</h2>
-      ${db.messages.map((m) => `<div class="card"><b>${esc(m.title)}</b><p class="muted">${esc(m.body)}</p></div>`).join("")}
-      <div class="card"><b>Elena · ${t("csMsg")}</b>
-        ${(cs.lines || []).map((l) => `<p class="bubble ${l.who === "cs" ? "me" : ""}">${esc(l.txt)}</p>`).join("")}
-        <div class="btn-row"><input class="field-input" id="chat-cs-out" /><button class="btn btn-navy" data-action="send-cs-out">${t("send")}</button></div>
+    return `${pageHead(t("inbox"), t("csMsg"))}
+      ${db.messages.map((m) => `<div class="msg-row"><span class="avatar sm">${m.kind === "cs" ? "CS" : "i"}</span><div><b>${esc(m.title)}</b><p class="muted">${esc(m.body)}</p></div></div>`).join("")}
+      <div class="chat-card">
+        <div class="chat-hd">${avatar("Elena Ruiz")} <div><b>Elena Ruiz</b><span class="muted">${t("csMsg")}</span></div></div>
+        <div class="chat-log">${(cs.lines || []).map((l) => `<p class="bubble ${l.who === "cs" ? "me" : ""}">${esc(l.txt)}</p>`).join("")}</div>
+        <div class="composer"><input class="field-input" id="chat-cs-out" placeholder="${esc(t("typeMsg"))}" /><button class="send-btn" data-action="send-cs-out">${ico("send")}</button></div>
       </div>`;
   }
   function pageCShift() {
     const n = db.orders.filter((o) => o.driverId).length;
     const batch = (db.logs || []).filter((l) => /batch|recall|flight/.test(l.e)).length;
-    return `<h2 class="page-title">${t("shift")}</h2>
+    const pending = db.orders.filter((o) => o.status === "pending_dispatch").length;
+    return `${pageHead(t("shift"), t("csMe"))}
+      <div class="profile-hero">${avatar("Ana Díaz", "lg")}<div><p class="eyebrow">PDT</p><h2>Ana Díaz</h2><span class="muted">${t("csMe")}</span></div></div>
       <div class="stat-grid">
         <div class="stat"><b>${n}</b><span>${t("assign")}</span></div>
-        <div class="stat"><b>${db.orders.filter((o) => o.status === "pending_dispatch").length}</b><span>${t("pendingDispatch")}</span></div>
+        <div class="stat"><b>${pending}</b><span>${t("pendingDispatch")}</span></div>
         <div class="stat"><b>${batch}</b><span>${t("logs")}</span></div>
-        <div class="stat"><b>Ana</b><span>${t("csMe")}</span></div>
+        <div class="stat"><b>105</b><span>${t("freeWait")}</span></div>
       </div>
-      <p class="hint">${t("walk2")}</p>
-      <button class="btn btn-ghost" data-action="cs-pwd">${t("pwdChange")}</button>`;
+      <button class="cell" data-action="cs-pwd"><span>${t("pwdChange")}<small>${t("pwdChanged")}</small></span><i>›</i></button>
+      <p class="hint">${t("walk2")}</p>`;
   }
 
   /* ---------- admin ---------- */
@@ -677,11 +728,13 @@
     const who = ui.role;
     const flight = o.flight && db.flights[o.flight];
     return `<div class="modal-mask" data-action="close-modal"><div class="modal" onclick="event.stopPropagation()">
-      <div class="card-hd"><b>${esc(o.id)}</b><span class="tag ${tagClass(o.status)}">${esc(st(o.status))}</span></div>
+      <div class="card-hd"><b>${esc(o.id)}</b><span class="tag ${tagClass(o.status)}">${esc(st(o.status))}</span><button type="button" class="sheet-x" data-action="close-modal">✕</button></div>
       ${mapHtml(o.from, o.to, { oid: o.id, did: d && d.id, mode: o.status === "in_trip" ? "track" : "route", h: 180, progress: o.status === "in_trip" ? 0.42 : "" })}
+      <div class="route-pick slim">
+        <div class="spine tall"><i class="dot from"></i><i class="line"></i><i class="dot to"></i></div>
+        <div><b>${esc(addrName(o.from))}</b><span class="muted">${esc(addrName(o.to))}</span></div>
+      </div>
       <div class="kv">
-        <div><span>${t("from")}</span><b>${esc(addrName(o.from))}</b></div>
-        <div><span>${t("to")}</span><b>${esc(addrName(o.to))}</b></div>
         <div><span>${t("when")}</span><b>${fmtTime(o.when, o.city)}</b></div>
         ${o.flight ? `<div><span>${t("flight")}</span><b>${esc(o.flight)} · ${t("actualLand")} ${fmtTime(flight?.actual || flight?.sched, o.city)}</b></div>` : ""}
         <div><span>${t("vehicle")}</span><b>${esc(t(o.vehicle))} · ${o.pax} ${t("paxUnit")} · ${o.bags} ${t("bagUnit")}</b></div>
@@ -845,49 +898,56 @@
         </div>
       </div>
       <div class="chrome-stage">${inner}</div>
-    </div>${ui.modal ? ui.modal.html : ""}${toastHtml()}`;
+    </div>${ui.role === "admin" ? `${ui.modal ? ui.modal.html : ""}${toastHtml()}` : ""}`;
   }
   function toastHtml() {
     return `<div class="toast-wrap">${ui.toast ? `<div class="toast ${ui.toast.kind}">${esc(ui.toast.msg)}</div>` : ""}</div>`;
   }
 
   function phone(tabs, body) {
-    const d = now();
-    const hh = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit", hour12: false }).format(d);
+    const hh = new Intl.DateTimeFormat("en-US", { timeZone: "America/Los_Angeles", hour: "2-digit", minute: "2-digit", hour12: false }).format(now());
     return `<div class="mini-stage"><div class="mini-phone">
-      <div class="notch"><span>${hh} PDT</span><span class="notch-dot"></span><span>5G</span></div>
-      <div class="mini-body">${body}
-        <nav class="tabbar">${tabs.map((tb) => `<button class="tab ${ui.route === tb.id ? "on" : ""}" data-go="${tb.id}"><b>${tb.ico}</b>${esc(tb.label)}</button>`).join("")}</nav>
+      <div class="mini-body">
+        <div class="status-bar">
+          <span class="sb-time">${hh}</span>
+          <span class="island" aria-hidden="true"></span>
+          <span class="sb-meta"><i class="sig"><em></em><em></em><em></em><em></em></i>5G<i class="batt"><em></em></i></span>
+        </div>
+        ${body}
+        <nav class="tabbar">${tabs.map((tb) => `<button class="tab ${ui.route === tb.id ? "on" : ""}" data-go="${tb.id}">${ico(tb.ico)}<span>${esc(tb.label)}</span></button>`).join("")}</nav>
+        <i class="home-ind" aria-hidden="true"></i>
       </div>
+      ${ui.modal ? ui.modal.html : ""}
+      ${toastHtml()}
     </div><p class="hint">${t("overlayHint")}</p></div>`;
   }
 
   function renderPhone() {
     if (ui.role === "passenger") {
       const tabs = [
-        { id: "p-home", ico: "△", label: t("book") },
-        { id: "p-orders", ico: "≡", label: t("orders") },
-        { id: "p-inbox", ico: "◇", label: t("inbox") },
-        { id: "p-me", ico: "○", label: t("me") },
+        { id: "p-home", ico: "book", label: t("book") },
+        { id: "p-orders", ico: "orders", label: t("orders") },
+        { id: "p-inbox", ico: "inbox", label: t("inbox") },
+        { id: "p-me", ico: "me", label: t("me") },
       ];
       const page = { "p-home": pagePHome, "p-orders": () => `<div class="mini-scroll">${pagePOrders()}</div>`, "p-inbox": () => `<div class="mini-scroll">${pagePInbox()}</div>`, "p-me": () => `<div class="mini-scroll">${pagePMe()}</div>` }[ui.route] || pagePHome;
       return phone(tabs, page());
     }
     if (ui.role === "driver") {
       const tabs = [
-        { id: "d-home", ico: "▣", label: t("workbench") },
-        { id: "d-orders", ico: "≡", label: t("orders") },
-        { id: "d-inbox", ico: "◇", label: t("inbox") },
-        { id: "d-me", ico: "○", label: t("me") },
+        { id: "d-home", ico: "work", label: t("workbench") },
+        { id: "d-orders", ico: "orders", label: t("orders") },
+        { id: "d-inbox", ico: "inbox", label: t("inbox") },
+        { id: "d-me", ico: "me", label: t("me") },
       ];
       const page = { "d-home": () => `<div class="mini-scroll">${pageDHome()}</div>`, "d-orders": () => `<div class="mini-scroll">${pageDOrders()}</div>`, "d-inbox": () => `<div class="mini-scroll">${pageDInbox()}</div>`, "d-me": () => `<div class="mini-scroll">${pageDMe()}</div>` }[ui.route] || pageDHome;
       return phone(tabs, page());
     }
     const tabs = [
-      { id: "c-queue", ico: "▦", label: t("dispatch") },
-      { id: "c-drv", ico: "▣", label: t("monitor") },
-      { id: "c-inbox", ico: "◇", label: t("inbox") },
-      { id: "c-shift", ico: "○", label: t("shift") },
+      { id: "c-queue", ico: "dispatch", label: t("dispatch") },
+      { id: "c-drv", ico: "monitor", label: t("monitor") },
+      { id: "c-inbox", ico: "inbox", label: t("inbox") },
+      { id: "c-shift", ico: "shift", label: t("shift") },
     ];
     const page = { "c-queue": () => `<div class="mini-scroll">${pageCQueue()}</div>`, "c-drv": () => `<div class="mini-scroll">${pageCDrivers()}</div>`, "c-inbox": () => `<div class="mini-scroll">${pageCInbox()}</div>`, "c-shift": () => `<div class="mini-scroll">${pageCShift()}</div>` }[ui.route] || pageCQueue;
     return phone(tabs, page());
@@ -953,7 +1013,7 @@
       location.hash = ui.route; render(); return;
     }
     if (name === "logout") { ui.authed = false; sessionStorage.removeItem("apron_in"); render(); return; }
-    if (name === "role") { ui.role = ds.v; ui.route = defaultRoute(ds.v); ui.filter = "all"; sessionStorage.setItem("apron_role", ui.role); location.hash = ui.route; render(); return; }
+    if (name === "role") { ui.role = ds.v; ui.route = defaultRoute(ds.v); ui.filter = "all"; ui.modal = null; sessionStorage.setItem("apron_role", ui.role); location.hash = ui.route; render(); return; }
     if (name === "reset") { resetDemo(); return; }
     if (name === "forgot") { toast(t("forgotSent"), "ok"); return; }
     if (name === "set-city") {
