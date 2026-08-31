@@ -746,6 +746,31 @@ table { width: 100%; border-collapse: collapse; font-size: 13px; }
 th, td { padding: 9px 10px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
 th { font-size: 11px; color: var(--mist); background: #faf7f1; }
 .dash-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.dash-grid.wide { grid-template-columns: repeat(4, 1fr); }
+.admin-hd { align-items: flex-end; margin-bottom: 14px; }
+.admin-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.admin-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 12px; }
+.admin-q { max-width: 280px; }
+.admin-split { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.admin-top .rbac { background: #ffffff18; }
+.admin-top .rbac button { color: #d8d2c6; }
+.admin-top .rbac button.on { background: var(--amber); color: var(--ink); }
+.admin-top .chrome-brand small { display: inline; margin-left: 8px; }
+.sub-title { font-family: var(--display); font-size: 16px; margin: 18px 0 8px; }
+.td-ops { display: flex; flex-wrap: wrap; gap: 4px; }
+.field-input.slim { height: 34px; width: 88px; padding: 0 8px; }
+.doc-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 10px 0; }
+.doc-card {
+  background: #0d1320;
+  color: #d8d2c6;
+  border-radius: 10px;
+  padding: 12px 10px;
+  min-height: 72px;
+  font-family: var(--fids);
+  letter-spacing: .06em;
+}
+.doc-card span { display: block; color: var(--amber); font-size: 11px; margin-bottom: 6px; }
+.bars.gold i { background: var(--amber); }
 .dash-card { background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
 .dash-card b { font-family: var(--fids); font-size: 28px; display: block; }
 .ai-list { display: grid; gap: 8px; }
@@ -872,7 +897,7 @@ th { font-size: 11px; color: var(--mist); background: #faf7f1; }
 .modal .leaflet-map { height: 180px; border-radius: 12px; overflow: hidden; }
 .mini-scroll.map-mode .leaflet-map { border-radius: 0; }
 @media (max-width: 1100px) {
-  .dash-grid { grid-template-columns: 1fr 1fr; }
+  .dash-grid, .dash-grid.wide, .admin-split, .doc-grid { grid-template-columns: 1fr 1fr; }
   .admin { height: auto; min-height: calc(100vh - 92px); }
   .admin-body { grid-template-columns: 1fr; }
   .sidebar { display: flex; gap: 6px; overflow: auto; }

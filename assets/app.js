@@ -20,6 +20,8 @@
     form: {},
     msgText: "",
     adminRole: "super",
+    adminQ: "",
+    dashRange: "7",
     inboxTab: "all",
     offerSeen: {},
     rateTags: [],
@@ -152,16 +154,32 @@
     const payments = [
       { id: "PAY1", orderId: "O-1004", channel: "stripe", kind: "charge", amount: 41.2, status: "captured" },
       { id: "PAY2", orderId: "O-1005", channel: "stripe", kind: "noshow", amount: 35, status: "captured" },
+      { id: "PAY3", orderId: "O-1003", channel: "paypal", kind: "preauth", amount: 89.8, status: "authorized" },
+      { id: "PAY4", orderId: "O-1002", channel: "wise", kind: "preauth", amount: 42.62, status: "authorized" },
     ];
     return {
       passenger, drivers, orders, messages, chats, flights, fees, complaints, payments,
-      settings: { city: "la", tz: "America/Los_Angeles", platform: "Apron", stripe: "pk_test_***", paypal: "sb-***", maps: "demo-map" },
+      settings: {
+        city: "la", tz: "America/Los_Angeles", platform: "Apron",
+        stripe: "pk_test_***", paypal: "sb-***", wise: "wise_***", revolut: "rev_***",
+        maps: "demo-map", flightSrc: "demo", ccpaOn: true,
+        privacy: "Apron Transfer LLC collects trip, flight, and payment data to fulfill booked airport transfers.",
+        agreement: "Bookings are dispatched by Apron CS. Drivers do not bid at the curb. Free wait starts at actual landing.",
+      },
       users: [
-        passenger,
-        { id: "P2", name: "Tom Baker", email: "tom@example.com", phone: "+1 646 555 0110", city: "ny", frozen: false, spend: 420 },
+        { ...passenger, frozen: false, spend: 186.4, balance: 0 },
+        { id: "P2", name: "Tom Baker", email: "tom@example.com", phone: "+1 646 555 0110", city: "ny", frozen: false, spend: 420, balance: 12 },
+        { id: "P3", name: "Sofia Alvarez", email: "sofia@example.com", phone: "+1 305 555 0144", city: "mia", frozen: true, spend: 88, balance: 0 },
       ],
-      cs: [{ id: "CS1", name: "Ana Díaz", role: "senior", shift: 14 }],
-      withdrawals: [{ id: "W1", driverId: "D1", amount: 180, account: "Wise · ELENA***", status: "pending" }],
+      cs: [
+        { id: "CS1", name: "Ana Díaz", role: "senior", shift: 14, email: "ana@apron.demo", active: true },
+        { id: "CS2", name: "Ben Cole", role: "junior", shift: 6, email: "ben@apron.demo", active: true },
+      ],
+      withdrawals: [
+        { id: "W1", driverId: "D1", amount: 180, account: "Wise · MAYA***", status: "pending" },
+        { id: "W0", driverId: "D3", amount: 240, account: "Revolut · JORD***", status: "paid" },
+      ],
+      vehicles: VEHICLES.map((v) => ({ ...v })),
       logs: [{ t: DEMO_NOW - 10000, who: "admin", e: "seed" }],
       notices: [{ id: "N1", to: "all", title: "LAX TBIT curb", body: "Use the inner island after 10pm." }],
     };
@@ -177,9 +195,12 @@
     }
   }
 
+  function vehicles() {
+    return (db && db.vehicles && db.vehicles.length) ? db.vehicles : VEHICLES;
+  }
   function quote(from, to, vehicleId, bags, whenMs, fees) {
-    const fe = fees || (db && db.fees) || { bag: 6, booking: 8, nightRate: 0.2 };
-    const v = VEHICLES.find((x) => x.id === vehicleId) || VEHICLES[1];
+    const fe = fees || (db && db.fees) || { bag: 6, booking: 8, nightRate: 0.2, airport: 0 };
+    const v = vehicles().find((x) => x.id === vehicleId) || VEHICLES[1];
     const mi = milesOf(from, to);
     const mile = v.start + mi * v.per;
     const bag = Math.max(0, (bags || 0) - 1) * (fe.bag ?? 6);
@@ -188,8 +209,9 @@
     const nightOn = h >= 22 || h < 6;
     const night = nightOn ? mile * (fe.nightRate ?? 0.2) : 0;
     const booking = fe.booking ?? 8;
-    const sub = mile + bag + night + booking;
-    return { mi: +mi.toFixed(1), mile: +mile.toFixed(2), bag: +bag.toFixed(2), night: +night.toFixed(2), booking, wait: 0, total: +sub.toFixed(2), nightOn };
+    const airport = (["lax", "jfk", "lga", "mia"].includes(from) || ["lax", "jfk", "lga", "mia"].includes(to)) ? (fe.airport || 0) : 0;
+    const sub = mile + bag + night + booking + airport;
+    return { mi: +mi.toFixed(1), mile: +mile.toFixed(2), bag: +bag.toFixed(2), night: +night.toFixed(2), booking, airport: +airport.toFixed(2), wait: 0, total: +sub.toFixed(2), nightOn };
   }
 
   let db;
@@ -201,11 +223,37 @@
     return seed();
   }
   function save() { localStorage.setItem(KEY, JSON.stringify(db)); }
+  function ensureSchema() {
+    if (!db.vehicles || !db.vehicles.length) db.vehicles = VEHICLES.map((v) => ({ ...v }));
+    if (!db.payments) db.payments = [];
+    if (!db.complaints) db.complaints = [];
+    if (!db.withdrawals) db.withdrawals = [];
+    if (!db.notices) db.notices = [];
+    if (db.fees.airport == null) db.fees.airport = 0;
+    if (db.fees.perMin == null) db.fees.perMin = 0.4;
+    db.users.forEach((u) => {
+      if (u.balance == null) u.balance = 0;
+      if (u.spend == null) u.spend = 0;
+      if (u.frozen == null) u.frozen = false;
+    });
+    db.cs.forEach((c) => {
+      if (c.active == null) c.active = true;
+      if (!c.email) c.email = `${c.id.toLowerCase()}@apron.demo`;
+    });
+    db.settings = Object.assign({
+      city: "la", tz: "America/Los_Angeles", platform: "Apron",
+      stripe: "pk_test_***", paypal: "sb-***", wise: "wise_***", revolut: "rev_***",
+      maps: "demo-map", flightSrc: "demo", ccpaOn: true,
+      privacy: "", agreement: "",
+    }, db.settings || {});
+  }
   db = load();
+  ensureSchema();
 
   function resetDemo() {
     localStorage.removeItem(KEY);
     db = seed();
+    ensureSchema();
     save();
     toast(t("resetDemo"), "ok");
   }
@@ -257,11 +305,14 @@
   function findOrder(id) { return db.orders.find((o) => o.id === id); }
   function findDriver(id) { return db.drivers.find((d) => d.id === id); }
 
-  function assignOrder(oid, did) {
+  function assignOrder(oid, did, force) {
     const o = findOrder(oid); const d = findDriver(did);
-    if (!o || !d || d.docs !== "ok" || !d.online || d.disabled) return toast("—", "err");
+    if (!o || !d || d.docs !== "ok" || d.disabled) return toast("—", "err");
+    if (!d.online && !force) return toast(t("off"), "err");
+    const prev = findDriver(o.driverId);
+    if (prev && prev.id !== did) prev.busy = false;
     o.driverId = did; o.status = "assigned"; d.busy = true;
-    pushLog(o, "assigned:" + d.name);
+    pushLog(o, (force ? "force_assigned:" : "assigned:") + d.name);
     notify(o.id, d.name, "order");
     save(); toast(t("toastAssigned"), "ok");
   }
@@ -599,6 +650,16 @@
   }
 
   /* ---------- admin ---------- */
+  function canSee(route) {
+    const r = ui.adminRole || "super";
+    if (r === "super") return true;
+    const map = {
+      ops: ["a-dash", "a-orders", "a-comp", "a-users", "a-drivers", "a-cs", "a-msg"],
+      fin: ["a-dash", "a-fin", "a-fees"],
+      cs: ["a-dash", "a-orders", "a-comp", "a-msg"],
+    };
+    return (map[r] || []).includes(route);
+  }
   function adminMenus() {
     return [
       { g: t("dashboard"), items: [{ id: "a-dash", title: t("dashboard") }] },
@@ -606,118 +667,271 @@
       { g: t("users"), items: [{ id: "a-users", title: t("users") }, { id: "a-drivers", title: t("drivers") }, { id: "a-cs", title: t("csMgr") }] },
       { g: t("finance"), items: [{ id: "a-fin", title: t("finance") }, { id: "a-fees", title: t("fees") }] },
       { g: t("announce"), items: [{ id: "a-msg", title: t("announce") }, { id: "a-set", title: t("settings") }] },
-    ];
+    ].map((g) => ({ ...g, items: g.items.filter((it) => canSee(it.id)) })).filter((g) => g.items.length);
+  }
+  function adminHead(title, extra) {
+    return `<div class="card-hd admin-hd"><div><p class="eyebrow">${t("admin")}</p><h2 class="page-title">${esc(title)}</h2></div><div class="admin-actions">${extra || ""}</div></div>`;
+  }
+  function adminSearch(ph) {
+    return `<input class="field-input admin-q" data-admin="q" value="${esc(ui.adminQ || "")}" placeholder="${esc(ph)}" />`;
+  }
+  function inRange(ms) {
+    const span = { "1": 1, "7": 7, "30": 30 }[ui.dashRange] || 7;
+    return ms >= ui.tick - span * 86400000;
+  }
+  function findUser(id) { return db.users.find((u) => u.id === id); }
+  function exportCsv(name, rows) {
+    const csv = rows.map((r) => r.map((c) => `"${String(c ?? "").replace(/"/g, '""')}"`).join(",")).join("\n");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    a.download = name;
+    a.click();
   }
   function pageADash() {
-    const o = db.orders;
-    const days = [4, 5, 6, 5, 7, o.length, Math.max(2, o.filter((x) => x.status === "pending_dispatch").length + 3)];
-    const max = Math.max(...days, 1);
-    return `<h2 class="page-title">${t("dashboard")}</h2>
-      <div class="dash-grid">
+    const all = db.orders;
+    const o = all.filter((x) => inRange(x.when));
+    const days = [0, 1, 2, 3, 4, 5, 6].map((i) => {
+      const from = ui.tick - (6 - i) * 86400000;
+      const to = from + 86400000;
+      const day = all.filter((x) => x.when >= from && x.when < to);
+      return { n: day.length, rev: day.reduce((s, x) => s + x.fare.total, 0) };
+    });
+    const maxN = Math.max(...days.map((d) => d.n), 1);
+    const maxR = Math.max(...days.map((d) => d.rev), 1);
+    return `${adminHead(t("dashboard"), `
+        <div class="seg">${[["1", "rangeToday"], ["7", "range7"], ["30", "range30"]].map(([v, k]) => `<button class="${ui.dashRange === v ? "on" : ""}" data-action="admin-range" data-v="${v}">${t(k)}</button>`).join("")}</div>
+        <button class="btn btn-ghost" data-action="export">${t("exportReport")}</button>`)}
+      <div class="dash-grid wide">
         <div class="dash-card"><b>${o.length}</b><span>${t("todayOrders")}</span></div>
         <div class="dash-card"><b>${o.filter((x) => x.status === "pending_dispatch").length}</b><span>${t("pendingDispatch")}</span></div>
+        <div class="dash-card"><b>${o.filter((x) => x.status === "completed").length}</b><span>${t("done")}</span></div>
+        <div class="dash-card"><b>${o.filter((x) => x.status === "cancelled").length}</b><span>${t("canceled")}</span></div>
         <div class="dash-card"><b>${db.drivers.filter((d) => d.online).length}</b><span>${t("onlineDrivers")}</span></div>
+        <div class="dash-card"><b>${db.users.filter((u) => !u.frozen).length}</b><span>${t("activeUsers")}</span></div>
         <div class="dash-card"><b>${money(o.reduce((s, x) => s + x.fare.total, 0))}</b><span>${t("revenue")}</span></div>
       </div>
-      <div class="card"><b>${t("trend7")}</b>
-        <div class="bars">${days.map((n, i) => `<i title="${n}" style="height:${Math.round(n / max * 64)}px"></i>`).join("")}</div>
-        <p class="muted">${t("statusMix")}: ${o.filter((x) => x.status === "completed").length} ${t("done")} · ${o.filter((x) => x.status === "noshow").length} No-show · ${o.filter((x) => x.status === "cancelled").length} ${t("canceled")}</p>
+      <div class="admin-split">
+        <div class="card"><b>${t("trend7")}</b>
+          <div class="bars">${days.map((d) => `<i title="${d.n}" style="height:${Math.round(d.n / maxN * 64)}px"></i>`).join("")}</div>
+        </div>
+        <div class="card"><b>${t("trendRev")}</b>
+          <div class="bars gold">${days.map((d) => `<i title="${money(d.rev)}" style="height:${Math.round(d.rev / maxR * 64)}px"></i>`).join("")}</div>
+        </div>
       </div>
+      <p class="muted">${t("statusMix")}: ${all.filter((x) => x.status === "completed").length} ${t("done")} · ${all.filter((x) => x.status === "noshow").length} No-show · ${all.filter((x) => x.status === "cancelled").length} ${t("canceled")}</p>
       <div class="fids-board">${["UA123", "AA88", "DL401"].map(fidsRow).join("")}</div>
       <p class="hint">${t("landingHow")}</p>`;
   }
   function pageAOrders() {
-    return `<div class="card-hd"><h2 class="page-title">${t("orderCtrl")}</h2>
-      <button class="btn btn-ghost" data-action="export">${t("export")}</button></div>
-      <div class="table-wrap"><table><thead><tr><th>ID</th><th>${t("status")}</th><th>${t("flight")}</th><th>${t("from")}</th><th>${t("driverInfo")}</th><th>${t("total")}</th><th></th></tr></thead><tbody>
-      ${db.orders.map((o) => `<tr>
-        <td>${esc(o.id)}</td><td><span class="tag ${tagClass(o.status)}">${esc(st(o.status))}</span></td>
-        <td>${esc(o.flight || "—")}</td><td>${esc(addrName(o.from))} → ${esc(addrName(o.to))}</td>
-        <td>${esc((findDriver(o.driverId) || {}).name || "—")}</td><td class="num">${money(o.fare.total)}</td>
-        <td><button class="chip" data-action="open-order" data-id="${o.id}">${t("detail")}</button>
-            ${o.status === "noshow" || o.evidence ? `<button class="chip" data-action="evidence" data-id="${o.id}">${t("evidence")}</button>` : ""}
-            ${["pending_dispatch", "assigned"].includes(o.status) ? `<button class="chip" data-action="force" data-id="${o.id}">${t("force")}</button>` : ""}
-            ${["completed", "cancelled", "noshow"].includes(o.status) ? `<button class="chip" data-action="refund" data-id="${o.id}">${t("refund")}</button>` : ""}</td>
+    const q = (ui.adminQ || "").toLowerCase();
+    const rows = db.orders.filter((o) => {
+      if (ui.filter !== "all" && ST_MAP[o.status] !== ui.filter) return false;
+      if (!q) return true;
+      const u = findUser(o.passengerId);
+      const d = findDriver(o.driverId);
+      return [o.id, o.flight, o.from, o.to, u?.phone, u?.name, d?.name].some((x) => String(x || "").toLowerCase().includes(q));
+    });
+    return `${adminHead(t("orderCtrl"), `<button class="btn btn-ghost" data-action="export">${t("export")}</button>`)}
+      <div class="admin-tools">${adminSearch(t("searchOrder"))}
+        <div class="seg wrap">${["all", "pendingDispatch", "assigned", "toPickup", "waiting", "overtime", "inTrip", "done", "canceled", "noshow"].map((k) => `<button class="${ui.filter === k ? "on" : ""}" data-action="filter" data-v="${k}">${t(k)}</button>`).join("")}</div>
+      </div>
+      <div class="table-wrap"><table><thead><tr>
+        <th>ID</th><th>${t("timeCol")}</th><th>${t("status")}</th><th>${t("vehCol")}</th><th>${t("userCol")}</th><th>${t("from")}</th><th>${t("driverInfo")}</th><th>${t("total")}</th><th>${t("actions")}</th>
+      </tr></thead><tbody>
+      ${rows.map((o) => {
+        const u = findUser(o.passengerId);
+        const d = findDriver(o.driverId);
+        return `<tr>
+        <td>${esc(o.id)}</td><td>${fmtTime(o.when, o.city)}</td>
+        <td><span class="tag ${tagClass(o.status)}">${esc(st(o.status))}</span></td>
+        <td>${esc(t(o.vehicle))}</td><td>${esc(u?.name || o.passengerId)}<div class="muted">${esc(u?.phone || "")}</div></td>
+        <td>${esc(addrName(o.from))} → ${esc(addrName(o.to))}<div class="muted">${esc(o.flight || "—")}</div></td>
+        <td>${esc(d?.name || "—")}</td><td class="num">${money(o.fare.total)}</td>
+        <td class="td-ops">
+          <button class="chip" data-action="open-order" data-id="${o.id}">${t("detail")}</button>
+          ${["pending_dispatch", "assigned", "to_pickup"].includes(o.status) ? `<button class="chip" data-action="force" data-id="${o.id}">${t("forceAssign")}</button>` : ""}
+          ${["pending_dispatch", "assigned"].includes(o.status) ? `<button class="chip" data-action="edit-when" data-id="${o.id}">${t("modifyTime")}</button>` : ""}
+          ${o.status === "noshow" || o.evidence ? `<button class="chip" data-action="evidence" data-id="${o.id}">${t("evidence")}</button>` : ""}
+          ${["completed", "cancelled", "noshow"].includes(o.status) ? `<button class="chip" data-action="refund" data-id="${o.id}">${t("refund")}</button>` : ""}
+          ${!["completed", "cancelled", "noshow"].includes(o.status) ? `<button class="chip" data-action="force-cancel" data-id="${o.id}">${t("forceCancel")}</button>` : ""}
+        </td></tr>`;
+      }).join("")}
+      </tbody></table></div>
+      <p class="hint">${rows.length} / ${db.orders.length}</p>`;
+  }
+  function pageAUsers() {
+    const q = (ui.adminQ || "").toLowerCase();
+    const rows = db.users.filter((u) => !q || [u.name, u.email, u.phone, u.id].some((x) => String(x || "").toLowerCase().includes(q)));
+    return `${adminHead(t("users"), `<button class="btn btn-ghost" data-action="export-users">${t("export")}</button>`)}
+      <div class="admin-tools">${adminSearch(t("searchOrder"))}</div>
+      <div class="table-wrap"><table><thead><tr>
+        <th>${t("name")}</th><th>${t("email")}</th><th>${t("phone")}</th><th>${t("revenue")}</th><th>${t("balance")}</th><th>${t("status")}</th><th>${t("actions")}</th>
+      </tr></thead><tbody>
+      ${rows.map((u) => `<tr>
+        <td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(u.phone)}</td>
+        <td class="num">${money(u.spend)}</td><td class="num">${money(u.balance)}</td>
+        <td><span class="tag ${u.frozen ? "tag-bad" : "tag-ok"}">${u.frozen ? t("accountOff") : t("accountOn")}</span></td>
+        <td class="td-ops">
+          <button class="chip" data-action="user-detail" data-id="${u.id}">${t("viewDetail")}</button>
+          <button class="chip" data-action="edit-bal" data-id="${u.id}">${t("adjustBal")}</button>
+          <button class="chip" data-action="freeze" data-id="${u.id}">${u.frozen ? t("unfreeze") : t("freeze")}</button>
+        </td>
       </tr>`).join("")}
       </tbody></table></div>`;
   }
-  function pageAUsers() {
-    return `<h2 class="page-title">${t("users")}</h2>
-      <div class="table-wrap"><table><thead><tr><th>${t("name")}</th><th>${t("email")}</th><th>${t("phone")}</th><th></th></tr></thead><tbody>
-      ${db.users.map((u) => `<tr><td>${esc(u.name)}</td><td>${esc(u.email)}</td><td>${esc(u.phone)}</td>
-        <td><button class="chip" data-action="freeze" data-id="${u.id}">${u.frozen ? t("unfreeze") : t("freeze")}</button></td></tr>`).join("")}
-      </tbody></table></div>`;
-  }
   function pageADrivers() {
-    return `<h2 class="page-title">${t("drivers")}</h2>
-      ${db.drivers.map((d) => `<div class="card">
-        <div class="card-hd"><b>${esc(d.name)}</b><span class="tag ${d.docs === "ok" ? "tag-ok" : "tag-wait"}">${d.docs === "ok" ? t("docsOk") : t("docsPending")}</span></div>
+    const q = (ui.adminQ || "").toLowerCase();
+    const rows = db.drivers.filter((d) => !q || [d.name, d.plate, d.phone, d.id].some((x) => String(x || "").toLowerCase().includes(q)));
+    return `${adminHead(t("drivers"), `<button class="btn btn-ghost" data-action="export-drv">${t("export")}</button>`)}
+      <div class="admin-tools">${adminSearch(t("searchOrder"))}</div>
+      ${rows.map((d) => `<div class="card">
+        <div class="card-hd">${avatar(d.name)}<div><b>${esc(d.name)}</b><div class="muted">${esc(d.plate)} · ${esc(d.phone)}</div></div>
+          <span class="tag ${d.docs === "ok" ? "tag-ok" : "tag-wait"}">${d.docs === "ok" ? t("docsOk") : t("docsPending")}</span>
+          <span class="tag ${d.disabled ? "tag-bad" : d.online ? "tag-ok" : "tag-mist"}">${d.disabled ? t("disabled") : d.online ? t("online") : t("off")}</span>
+        </div>
         <div class="kv">
           <div><span>${t("level")}</span><b>${t(d.level)}</b></div>
-          <div><span>${t("rating")} / ${t("acceptRate")} / ${t("complaints")}</span><b>${d.rating} · ${Math.round(d.accept * 100)}% · ${d.complaints}</b></div>
+          <div><span>${t("credit")}</span><b>${d.rating} · ${t("acceptRate")} ${Math.round(d.accept * 100)}% · ${t("complaints")} ${d.complaints}</b></div>
+          <div><span>${t("earnings")}</span><b>${money(d.earnings)}</b></div>
         </div>
-        ${d.docs !== "ok" ? `<div class="btn-row"><button class="btn btn-navy" data-action="approve-d" data-id="${d.id}">${t("approve")}</button><button class="btn btn-ghost" data-action="reject-d" data-id="${d.id}">${t("rejectDoc")}</button></div>` : ""}
-        <button class="chip" data-action="toggle-drv" data-id="${d.id}">${d.disabled ? t("enableDrv") : t("disabled")}</button>
+        <div class="btn-row tight">
+          <button class="btn btn-ghost" data-action="drv-detail" data-id="${d.id}">${t("docPreview")}</button>
+          ${d.docs !== "ok" ? `<button class="btn btn-navy" data-action="approve-d" data-id="${d.id}">${t("approve")}</button><button class="btn btn-ghost" data-action="reject-d" data-id="${d.id}">${t("rejectDoc")}</button>` : ""}
+          <button class="btn btn-ghost" data-action="toggle-drv" data-id="${d.id}">${d.disabled ? t("enableDrv") : t("disabled")}</button>
+        </div>
       </div>`).join("")}`;
   }
   function pageACS() {
-    return `<h2 class="page-title">${t("csMgr")}</h2>${db.cs.map((c) => `<div class="card kv"><div><span>${esc(c.name)}</span><b>${esc(c.role)}</b></div><div><span>${t("shift")}</span><b>${c.shift}</b></div></div>`).join("")}`;
+    return `${adminHead(t("csMgr"))}
+      <div class="card">
+        <b>${t("addCs")}</b>
+        <div class="btn-row" style="margin-top:10px">
+          <input class="field-input" id="cs-name" placeholder="${esc(t("name"))}" />
+          <input class="field-input" id="cs-email" placeholder="${esc(t("csEmail"))}" />
+          <button class="btn btn-navy" data-action="add-cs">${t("addCs")}</button>
+        </div>
+      </div>
+      ${db.cs.map((c) => `<div class="card">
+        <div class="card-hd">${avatar(c.name)}<div><b>${esc(c.name)}</b><span class="muted">${esc(c.email)}</span></div>
+          <span class="tag ${c.active ? "tag-ok" : "tag-mist"}">${c.active ? t("csActive") : t("csInactive")}</span></div>
+        <div class="kv"><div><span>${t("level")}</span><b>${esc(c.role)}</b></div><div><span>${t("shift")}</span><b>${c.shift}</b></div></div>
+        <div class="btn-row tight">
+          <button class="btn btn-ghost" data-action="cs-toggle" data-id="${c.id}">${c.active ? t("csInactive") : t("csActive")}</button>
+          <button class="btn btn-ghost" data-action="cs-pwd">${t("pwdChange")}</button>
+        </div>
+      </div>`).join("")}`;
   }
   function pageAFin() {
-    return `<h2 class="page-title">${t("finance")}</h2>
+    const rev = db.orders.reduce((s, o) => s + o.fare.total, 0);
+    const plat = rev * db.fees.commission;
+    const drv = rev - plat;
+    const pays = db.payments || [];
+    return `${adminHead(t("finance"), `<button class="btn btn-ghost" data-action="export-pay">${t("export")}</button>`)}
       <div class="dash-grid">
-        <div class="dash-card"><b>${money(db.orders.reduce((s, o) => s + o.fare.total, 0))}</b><span>${t("revenue")}</span></div>
+        <div class="dash-card"><b>${money(rev)}</b><span>${t("revenue")}</span></div>
+        <div class="dash-card"><b>${money(plat)}</b><span>${t("settlePlat")}</span></div>
+        <div class="dash-card"><b>${money(drv)}</b><span>${t("settleDrv")}</span></div>
         <div class="dash-card"><b>${Math.round(db.fees.commission * 100)}%</b><span>${t("commission")}</span></div>
       </div>
-      ${db.withdrawals.map((w) => `<div class="card kv">
-        <div><span>${esc(w.id)}</span><b>${money(w.amount)}</b></div>
-        <div><span>${esc(w.account)}</span><span class="tag tag-wait">${esc(w.status)}</span></div>
-        <button class="btn btn-navy" data-action="pay-w" data-id="${w.id}">${t("audit")}</button>
-      </div>`).join("")}`;
+      <div class="card"><div class="card-hd"><b>${t("commission")}</b>
+        <div class="btn-row"><input class="field-input" id="fee-comm" type="number" step="0.01" value="${db.fees.commission}" /><button class="btn btn-navy" data-action="save-comm">${t("save")}</button></div>
+      </div>
+      <h3 class="sub-title">${t("withdraw")}</h3>
+      ${db.withdrawals.map((w) => {
+        const d = findDriver(w.driverId);
+        return `<div class="card kv">
+        <div><span>${esc(w.id)} · ${esc(d?.name || w.driverId)}</span><b>${money(w.amount)}</b></div>
+        <div><span>${esc(w.account)}</span><span class="tag ${w.status === "paid" ? "tag-ok" : w.status === "rejected" ? "tag-bad" : "tag-wait"}">${w.status === "paid" ? t("paidW") : w.status === "rejected" ? t("rejectW") : t("pendingW")}</span></div>
+        ${w.status === "pending" ? `<div class="btn-row"><button class="btn btn-navy" data-action="pay-w" data-id="${w.id}">${t("paidW")}</button>
+          <button class="btn btn-ghost" data-action="reject-w" data-id="${w.id}">${t("rejectW")}</button></div>` : ""}
+      </div>`;
+      }).join("")}
+      <h3 class="sub-title">${t("payLog")}</h3>
+      <div class="table-wrap"><table><thead><tr><th>ID</th><th>${t("orders")}</th><th>${t("payWith")}</th><th>${t("status")}</th><th>${t("total")}</th></tr></thead><tbody>
+        ${pays.map((p) => `<tr><td>${esc(p.id)}</td><td>${esc(p.orderId)}</td><td>${esc(t(p.channel) === p.channel ? p.channel : t(p.channel))}</td>
+          <td><span class="tag ${p.status === "captured" || p.status === "refunded" ? "tag-ok" : "tag-wait"}">${esc(t(p.status) === p.status ? p.status : t(p.status))}</span></td>
+          <td class="num">${money(p.amount)}</td></tr>`).join("")}
+      </tbody></table></div>`;
   }
   function pageAFees() {
     const f = db.fees;
-    return `<h2 class="page-title">${t("fees")}</h2>
+    return `${adminHead(t("fees"))}
       <div class="card">
-        ${VEHICLES.map((v) => `<div class="kv" style="margin-bottom:8px"><div><span>${t(v.id)}</span><b>${v.seats} ${t("paxUnit")} · ${money(v.start)}+${money(v.per)}/${t("mi")}</b></div></div>`).join("")}
+        <b>${t("vehCol")}</b>
+        <div class="table-wrap" style="margin-top:10px"><table><thead><tr><th>${t("vehCol")}</th><th>${t("pax")}</th><th>${t("bags")}</th><th>${t("mile")}</th><th>/${t("mi")}</th></tr></thead><tbody>
+          ${vehicles().map((v) => `<tr>
+            <td>${esc(t(v.id))}</td>
+            <td><input class="field-input slim" id="v-${v.id}-seats" type="number" value="${v.seats}" /></td>
+            <td><input class="field-input slim" id="v-${v.id}-bags" type="number" value="${v.bags}" /></td>
+            <td><input class="field-input slim" id="v-${v.id}-start" type="number" step="0.1" value="${v.start}" /></td>
+            <td><input class="field-input slim" id="v-${v.id}-per" type="number" step="0.05" value="${v.per}" /></td>
+          </tr>`).join("")}
+        </tbody></table></div>
         <div class="field"><label>${t("freeWait")}</label><input class="field-input" id="fee-wait" type="number" value="${f.freeWait}" /></div>
         <div class="field"><label>${t("bookingFee")} USD</label><input class="field-input" id="fee-book" type="number" value="${f.booking}" /></div>
         <div class="field"><label>${t("bagFee")}</label><input class="field-input" id="fee-bag" type="number" value="${f.bag}" /></div>
+        <div class="field"><label>${t("airportFee")}</label><input class="field-input" id="fee-air" type="number" value="${f.airport || 0}" /></div>
         <div class="field"><label>${t("noshowFee")}</label><input class="field-input" id="fee-ns" type="number" value="${f.noshow}" /></div>
         <div class="field"><label>${t("waitFee")} / min</label><input class="field-input" id="fee-wpm" type="number" step="0.05" value="${f.waitPerMin}" /></div>
+        <div class="field"><label>${t("perMin")}</label><input class="field-input" id="fee-min" type="number" step="0.05" value="${f.perMin || 0.4}" /></div>
         <div class="field"><label>${t("nightFee")} %</label><input class="field-input" id="fee-night" type="number" step="0.05" value="${f.nightRate}" /></div>
         <button class="btn btn-primary" data-action="save-fees">${t("save")}</button>
       </div>`;
   }
   function pageAComp() {
     const rows = db.complaints || [];
-    return `<h2 class="page-title">${t("dispute")}</h2>
+    return `${adminHead(t("dispute"))}
       ${rows.map((c) => `<div class="card">
         <div class="card-hd"><b>${esc(c.orderId)}</b><span class="tag ${c.status === "open" ? "tag-wait" : "tag-ok"}">${esc(c.status)}</span></div>
         <p>${esc(c.text)}</p>
         ${c.reply ? `<p class="muted">${t("reply")}: ${esc(c.reply)}</p>` : ""}
-        ${c.status === "open" ? `<div class="btn-row"><input class="field-input" id="rep-${c.id}" placeholder="${esc(t("reply"))}" /><button class="btn btn-navy" data-action="reply-k" data-id="${c.id}">${t("reply")}</button></div>` : ""}
-      </div>`).join("") || `<div class="empty">${t("none")}</div>`}`;
+        <div class="btn-row tight">
+          <button class="btn btn-ghost" data-action="open-order" data-id="${c.orderId}">${t("detail")}</button>
+          <button class="btn btn-ghost" data-action="evidence" data-id="${c.orderId}">${t("evidence")}</button>
+          <button class="btn btn-ghost" data-action="refund" data-id="${c.orderId}">${t("refund")}</button>
+        </div>
+        ${c.status === "open" ? `<div class="btn-row" style="margin-top:8px"><input class="field-input" id="rep-${c.id}" placeholder="${esc(t("reply"))}" /><button class="btn btn-navy" data-action="reply-k" data-id="${c.id}">${t("reply")}</button></div>` : ""}
+      </div>`).join("") || emptyBox()}`;
   }
   function pageAMsg() {
-    return `<h2 class="page-title">${t("announce")}</h2>
-      ${db.notices.map((n) => `<div class="card"><b>${esc(n.title)}</b><p class="muted">${esc(n.body)}</p></div>`).join("")}
-      <div class="field"><label>${t("announce")}</label><input class="field-input" id="n-title" /></div>
-      <textarea class="field-area" id="n-body"></textarea>
-      <button class="btn btn-navy" data-action="push-n">${t("send")}</button>`;
+    const to = ui.form.nTo || "all";
+    return `${adminHead(t("announce"))}
+      <div class="card">
+        <div class="seg">${[["all", "targetAll"], ["passenger", "targetPax"], ["driver", "targetDrv"]].map(([v, k]) => `<button class="${to === v ? "on" : ""}" data-action="set-form" data-k="nTo" data-v="${v}">${t(k)}</button>`).join("")}</div>
+        <div class="field"><label>${t("announce")}</label><input class="field-input" id="n-title" /></div>
+        <textarea class="field-area" id="n-body"></textarea>
+        <button class="btn btn-navy" data-action="push-n">${t("send")}</button>
+      </div>
+      ${db.notices.map((n) => `<div class="card"><div class="card-hd"><b>${esc(n.title)}</b><span class="tag tag-navy">${esc(t({ all: "targetAll", passenger: "targetPax", driver: "targetDrv" }[n.to] || "targetAll"))}</span></div>
+        <p class="muted">${esc(n.body)}</p>
+        <button class="chip" data-action="del-notice" data-id="${n.id}">${t("deleteNotice")}</button>
+      </div>`).join("")}`;
   }
   function pageASet() {
-    return `<h2 class="page-title">${t("settings")}</h2>
-      <div class="card kv">
-        <div><span>${t("timezone")}</span><b>${esc(db.settings.tz)}</b></div>
-        <div><span>${t("mapsKey")}</span><b>${esc(db.settings.maps)}</b></div>
-        <div><span>${t("payApi")}</span><b>Stripe ${esc(db.settings.stripe)} · PayPal ${esc(db.settings.paypal)}</b></div>
-        <div><span>CCPA</span><b>on</b></div>
-        <div><span>${t("rbac")}</span><b>${t("superAdmin")} / ${t("ops")} / ${t("fin")} / ${t("csRole")}</b></div>
+    const s = db.settings;
+    return `${adminHead(t("settings"))}
+      <div class="card">
+        <div class="field"><label>${t("brand")}</label><input class="field-input" id="set-platform" value="${esc(s.platform)}" /></div>
+        <div class="field"><label>${t("timezone")}</label><select class="field-select" id="set-tz">
+          ${["America/Los_Angeles", "America/New_York", "America/Chicago"].map((z) => `<option ${s.tz === z ? "selected" : ""}>${z}</option>`).join("")}
+        </select></div>
+        <div class="field"><label>${t("mapsKey")}</label><input class="field-input" id="set-maps" value="${esc(s.maps)}" /></div>
+        <div class="field"><label>Stripe</label><input class="field-input" id="set-stripe" value="${esc(s.stripe)}" /></div>
+        <div class="field"><label>PayPal</label><input class="field-input" id="set-paypal" value="${esc(s.paypal)}" /></div>
+        <div class="field"><label>${t("wiseApi")}</label><input class="field-input" id="set-wise" value="${esc(s.wise || "")}" /></div>
+        <div class="field"><label>${t("revolutApi")}</label><input class="field-input" id="set-rev" value="${esc(s.revolut || "")}" /></div>
+        <div class="field"><label>${t("flightSrcLabel")}</label><input class="field-input" id="set-flight" value="${esc(s.flightSrc || "demo")}" /></div>
+        <div class="field"><label>${t("privacy")}</label><textarea class="field-area" id="set-privacy">${esc(s.privacy || "")}</textarea></div>
+        <div class="field"><label>${t("agreement")}</label><textarea class="field-area" id="set-agree">${esc(s.agreement || "")}</textarea></div>
+        <label class="hint"><input type="checkbox" id="set-ccpa" ${s.ccpaOn ? "checked" : ""} /> CCPA</label>
+        <p class="hint">${t("rbac")}: ${t("superAdmin")} / ${t("ops")} / ${t("fin")} / ${t("csRole")}</p>
+        <div class="btn-row" style="margin-top:12px">
+          <button class="btn btn-primary" data-action="save-set">${t("saveSettings")}</button>
+          <button class="btn btn-ghost" data-action="backup">${t("backup")}</button>
+        </div>
       </div>
       <p class="hint">${t("flightSrc")}</p>
-      <p class="hint">${t("manualQ")}</p>
-      <button class="btn btn-ghost" data-action="backup">${t("backup")}</button>`;
+      <p class="hint">${t("manualQ")}</p>`;
   }
 
   /* ---------- order modal ---------- */
@@ -764,8 +978,14 @@
         ${who === "driver" && o.status === "overtime_confirm" ? `<button class="btn btn-teal" data-action="start-o" data-id="${o.id}">${t("startTrip")}</button><button class="btn btn-danger" data-action="noshow" data-id="${o.id}">${t("closeNoshow")}</button>` : ""}
         ${who === "driver" && o.status === "in_trip" ? `<button class="btn btn-primary" data-action="end-o" data-id="${o.id}">${t("endTrip")}</button>` : ""}
         ${who === "admin" || who === "dispatch" ? `<button class="btn btn-ghost" data-action="evidence" data-id="${o.id}">${t("genEvidence")}</button><button class="btn btn-ghost" data-action="force-cancel" data-id="${o.id}">${t("forceCancel")}</button>` : ""}
+        ${who === "admin" && ["pending_dispatch", "assigned", "to_pickup"].includes(o.status) ? `<button class="btn btn-navy" data-action="edit-when" data-id="${o.id}">${t("modifyTime")}</button>` : ""}
       </div>
       <p class="hint">${t("cancelRule")}</p>
+      ${who === "admin" && ["pending_dispatch", "assigned", "to_pickup"].includes(o.status) ? `<div class="card" style="margin-top:10px"><b>${t("forceAssign")}</b>
+        <div class="ai-list">${aiRank(o).slice(0, 4).map((r) => `<div class="ai-item">${avatar(r.d.name)}
+          <div><b>${esc(r.d.name)}</b> · ${t(r.d.level)} · ${r.score}<div class="muted">${r.dist} mi · ${!r.d.online ? t("off") : r.d.busy ? t("busy") : t("idle")}</div></div>
+          <button class="btn btn-primary" style="height:34px;width:auto" data-action="force-assign" data-oid="${o.id}" data-did="${r.d.id}">${t("assign")}</button>
+        </div>`).join("")}</div></div>` : ""}
     </div></div>`;
   }
 
@@ -847,6 +1067,53 @@
       <div class="field"><label>${t("nick")}</label><input class="field-input" id="p-nick" value="${esc(p.nick || p.name)}" /></div>
       <div class="field"><label>${t("phone")}</label><input class="field-input" id="p-phone" value="${esc(p.phone)}" /></div>
       <button class="btn btn-primary" data-action="save-profile">${t("saveProfile")}</button>
+    </div></div>`;
+  }
+  function whenModal(id) {
+    const o = findOrder(id); if (!o) return "";
+    return `<div class="modal-mask" data-action="close-modal"><div class="modal" onclick="event.stopPropagation()">
+      <h3>${t("modifyTime")} · ${esc(o.id)}</h3>
+      <div class="field"><label>${t("when")}</label><input class="field-input" type="datetime-local" id="edit-when" value="${esc(toLocalInput(o.when))}" /></div>
+      <button class="btn btn-primary" data-action="save-when" data-id="${o.id}">${t("saveWhen")}</button>
+    </div></div>`;
+  }
+  function userModal(id) {
+    const u = findUser(id); if (!u) return "";
+    const trips = db.orders.filter((o) => o.passengerId === u.id);
+    return `<div class="modal-mask" data-action="close-modal"><div class="modal" onclick="event.stopPropagation()">
+      <div class="profile-hero">${avatar(u.name, "lg")}<div><h2>${esc(u.name)}</h2><span class="muted">${esc(u.email)}</span></div></div>
+      <div class="kv">
+        <div><span>${t("phone")}</span><b>${esc(u.phone)}</b></div>
+        <div><span>${t("balance")}</span><b>${money(u.balance)}</b></div>
+        <div><span>${t("revenue")}</span><b>${money(u.spend)}</b></div>
+        <div><span>${t("status")}</span><b>${u.frozen ? t("accountOff") : t("accountOn")}</b></div>
+      </div>
+      <p class="muted">${trips.length} ${t("orders")}</p>
+      <div class="btn-row"><button class="btn btn-navy" data-action="edit-bal" data-id="${u.id}">${t("adjustBal")}</button>
+        <button class="btn btn-ghost" data-action="freeze" data-id="${u.id}">${u.frozen ? t("unfreeze") : t("freeze")}</button></div>
+    </div></div>`;
+  }
+  function balModal(id) {
+    const u = findUser(id); if (!u) return "";
+    return `<div class="modal-mask" data-action="close-modal"><div class="modal" onclick="event.stopPropagation()">
+      <h3>${t("adjustBal")} · ${esc(u.name)}</h3>
+      <p class="hint">${t("balHint")} · ${t("balance")} ${money(u.balance)}</p>
+      <input class="field-input" id="bal-delta" type="number" step="0.01" placeholder="12.00" />
+      <button class="btn btn-primary" style="margin-top:10px" data-action="save-bal" data-id="${u.id}">${t("save")}</button>
+    </div></div>`;
+  }
+  function driverModal(id) {
+    const d = findDriver(id); if (!d) return "";
+    return `<div class="modal-mask" data-action="close-modal"><div class="modal" onclick="event.stopPropagation()">
+      <div class="card-hd"><b>${esc(d.name)}</b><span class="tag ${d.docs === "ok" ? "tag-ok" : "tag-wait"}">${d.docs === "ok" ? t("docsOk") : t("docsPending")}</span></div>
+      <div class="doc-grid">
+        <div class="doc-card"><span>${t("license")}</span><b>CA DL · ${esc(d.plate)}</b></div>
+        <div class="doc-card"><span>${t("insurance")}</span><b>TCP ${d.docs === "ok" ? "2026" : "—"}</b></div>
+        <div class="doc-card"><span>${t("tlc")}</span><b>${d.level === "gold" ? "TNC-OK" : "TNC"}</b></div>
+      </div>
+      <p class="muted">${t("setLevel")}</p>
+      <div class="chips">${["gold", "silver", "bronze"].map((lv) => `<button class="chip ${d.level === lv ? "on" : ""}" data-action="set-level" data-id="${d.id}" data-v="${lv}">${t(lv)}</button>`).join("")}</div>
+      ${d.docs !== "ok" ? `<div class="btn-row"><button class="btn btn-navy" data-action="approve-d" data-id="${d.id}">${t("approve")}</button><button class="btn btn-ghost" data-action="reject-d" data-id="${d.id}">${t("rejectDoc")}</button></div>` : ""}
     </div></div>`;
   }
 
@@ -956,8 +1223,13 @@
   function renderAdmin() {
     const pages = { "a-dash": pageADash, "a-orders": pageAOrders, "a-comp": pageAComp, "a-users": pageAUsers, "a-drivers": pageADrivers, "a-cs": pageACS, "a-fin": pageAFin, "a-fees": pageAFees, "a-msg": pageAMsg, "a-set": pageASet };
     const page = pages[ui.route] || pageADash;
+    if (!canSee(ui.route)) ui.route = "a-dash";
     return `<div class="admin">
-      <div class="admin-top"><div class="chrome-brand"><img src="assets/logo.svg" alt="" />${t("admin")}</div><span class="muted">${t("demoNow")} 10:40 PDT</span></div>
+      <div class="admin-top">
+        <div class="chrome-brand"><img src="assets/logo.svg" alt="" />${t("admin")}<small>${esc(db.settings.platform || "Apron")}</small></div>
+        <div class="seg rbac">${[["super", "superAdmin"], ["ops", "ops"], ["fin", "fin"], ["cs", "csRole"]].map(([v, k]) => `<button class="${ui.adminRole === v ? "on" : ""}" data-action="admin-role" data-v="${v}">${t(k)}</button>`).join("")}</div>
+        <span class="muted">${t("demoNow")} 10:40 PDT</span>
+      </div>
       <div class="admin-body">
         <aside class="sidebar">${adminMenus().map((g) => `<div class="nav-g">${esc(g.g)}</div>${g.items.map((it) => `<button class="nav-item ${ui.route === it.id ? "on" : ""}" data-go="${it.id}">${esc(it.title)}</button>`).join("")}`).join("")}</aside>
         <main class="content">${page()}</main>
@@ -982,6 +1254,7 @@
     ui.route = id;
     location.hash = id;
     ui.modal = null;
+    ui.adminQ = "";
     render();
   }
 
@@ -999,6 +1272,10 @@
       ui.form[el.dataset.form] = el.value;
       render();
     }));
+    document.querySelectorAll("[data-admin]").forEach((el) => {
+      el.addEventListener("change", () => { ui.adminQ = el.value; render(); });
+      el.addEventListener("keydown", (e) => { if (e.key === "Enter") { ui.adminQ = el.value; render(); } });
+    });
   }
 
   function onAction(name, ds) {
@@ -1239,30 +1516,111 @@
     if (name === "withdraw") {
       db.withdrawals.unshift({ id: uid("W"), driverId: "D1", amount: 80, account: "Wise · MAYA***", status: "pending" }); save(); toast(t("toastWithdraw"), "ok"); return;
     }
-    if (name === "freeze") {
-      const u = db.users.find((x) => x.id === ds.id); if (u) u.frozen = !u.frozen; save(); toast(t("toastSaved"), "ok"); render(); return;
+    if (name === "admin-range") { ui.dashRange = ds.v; render(); return; }
+    if (name === "admin-role") { ui.adminRole = ds.v; if (!canSee(ui.route)) ui.route = "a-dash"; render(); return; }
+    if (name === "force-assign") { assignOrder(ds.oid, ds.did, true); ui.modal = null; render(); return; }
+    if (name === "edit-when") { ui.modal = { html: whenModal(ds.id) }; render(); return; }
+    if (name === "save-when") {
+      const o = findOrder(ds.id); if (!o) return;
+      const when = parseWhen($("#edit-when")?.value);
+      if (when < ui.tick) return toast(t("pastTime"), "err");
+      o.when = when; pushLog(o, "time_changed"); save(); toast(t("toastSaved"), "ok"); ui.modal = null; render(); return;
     }
-    if (name === "approve-d") { const d = findDriver(ds.id); d.docs = "ok"; save(); toast(t("toastSaved"), "ok"); render(); return; }
-    if (name === "reject-d") { toast(t("rejectDoc")); return; }
-    if (name === "pay-w") { const w = db.withdrawals.find((x) => x.id === ds.id); if (w) w.status = "paid"; save(); toast(t("toastSaved"), "ok"); render(); return; }
+    if (name === "user-detail") { ui.modal = { html: userModal(ds.id) }; render(); return; }
+    if (name === "edit-bal") { ui.modal = { html: balModal(ds.id) }; render(); return; }
+    if (name === "save-bal") {
+      const u = findUser(ds.id); if (!u) return;
+      u.balance = +(Number(u.balance || 0) + Number($("#bal-delta")?.value || 0)).toFixed(2);
+      save(); toast(t("toastSaved"), "ok"); ui.modal = null; render(); return;
+    }
+    if (name === "drv-detail") { ui.modal = { html: driverModal(ds.id) }; render(); return; }
+    if (name === "set-level") {
+      const d = findDriver(ds.id); if (!d) return;
+      d.level = ds.v; save(); toast(t("toastSaved"), "ok"); ui.modal = { html: driverModal(d.id) }; render(); return;
+    }
+    if (name === "add-cs") {
+      const nameV = $("#cs-name")?.value?.trim(); const email = $("#cs-email")?.value?.trim();
+      if (!nameV) return toast(t("name"), "err");
+      db.cs.push({ id: uid("CS"), name: nameV, email: email || "cs@apron.demo", role: "junior", shift: 0, active: true });
+      save(); toast(t("toastSaved"), "ok"); render(); return;
+    }
+    if (name === "cs-toggle") {
+      const c = db.cs.find((x) => x.id === ds.id); if (c) c.active = !c.active; save(); toast(t("toastSaved"), "ok"); render(); return;
+    }
+    if (name === "freeze") {
+      const u = db.users.find((x) => x.id === ds.id); if (u) u.frozen = !u.frozen; save(); toast(t("toastSaved"), "ok"); ui.modal = null; render(); return;
+    }
+    if (name === "approve-d") { const d = findDriver(ds.id); d.docs = "ok"; save(); toast(t("toastSaved"), "ok"); ui.modal = null; render(); return; }
+    if (name === "reject-d") { const d = findDriver(ds.id); if (d) d.docs = "pending"; save(); toast(t("rejectDoc")); ui.modal = null; render(); return; }
+    if (name === "pay-w") { const w = db.withdrawals.find((x) => x.id === ds.id); if (w) w.status = "paid"; save(); toast(t("paidW"), "ok"); render(); return; }
+    if (name === "reject-w") { const w = db.withdrawals.find((x) => x.id === ds.id); if (w) w.status = "rejected"; save(); toast(t("rejectW")); render(); return; }
+    if (name === "save-comm") {
+      db.fees.commission = Number($("#fee-comm")?.value || db.fees.commission); save(); toast(t("toastSaved"), "ok"); render(); return;
+    }
     if (name === "save-fees") {
       db.fees.freeWait = Number($("#fee-wait")?.value || 105);
       db.fees.booking = Number($("#fee-book")?.value || 8);
       db.fees.bag = Number($("#fee-bag")?.value || 6);
+      db.fees.airport = Number($("#fee-air")?.value || 0);
       db.fees.noshow = Number($("#fee-ns")?.value || 35);
       db.fees.waitPerMin = Number($("#fee-wpm")?.value || 0.85);
+      db.fees.perMin = Number($("#fee-min")?.value || 0.4);
       db.fees.nightRate = Number($("#fee-night")?.value || 0.2);
-      save(); toast(t("toastSaved"), "ok"); return;
+      db.vehicles.forEach((v) => {
+        v.seats = Number($(`#v-${v.id}-seats`)?.value || v.seats);
+        v.bags = Number($(`#v-${v.id}-bags`)?.value || v.bags);
+        v.start = Number($(`#v-${v.id}-start`)?.value || v.start);
+        v.per = Number($(`#v-${v.id}-per`)?.value || v.per);
+      });
+      save(); toast(t("toastSaved"), "ok"); render(); return;
     }
     if (name === "push-n") {
-      db.notices.unshift({ id: uid("N"), title: $("#n-title")?.value || t("announce"), body: $("#n-body")?.value || "", to: "all" }); save(); toast(t("toastSaved"), "ok"); render(); return;
+      db.notices.unshift({ id: uid("N"), title: $("#n-title")?.value || t("announce"), body: $("#n-body")?.value || "", to: ui.form.nTo || "all" });
+      save(); toast(t("toastSaved"), "ok"); render(); return;
+    }
+    if (name === "del-notice") {
+      db.notices = db.notices.filter((n) => n.id !== ds.id); save(); toast(t("deleteNotice"), "ok"); render(); return;
+    }
+    if (name === "save-set") {
+      Object.assign(db.settings, {
+        platform: $("#set-platform")?.value || db.settings.platform,
+        tz: $("#set-tz")?.value || db.settings.tz,
+        maps: $("#set-maps")?.value || db.settings.maps,
+        stripe: $("#set-stripe")?.value || db.settings.stripe,
+        paypal: $("#set-paypal")?.value || db.settings.paypal,
+        wise: $("#set-wise")?.value || db.settings.wise,
+        revolut: $("#set-rev")?.value || db.settings.revolut,
+        flightSrc: $("#set-flight")?.value || db.settings.flightSrc,
+        privacy: $("#set-privacy")?.value || "",
+        agreement: $("#set-agree")?.value || "",
+        ccpaOn: !!$("#set-ccpa")?.checked,
+      });
+      save(); toast(t("toastSaved"), "ok"); render(); return;
     }
     if (name === "export") {
-      const rows = [["id", "status", "from", "to", "flight", "total"], ...db.orders.map((o) => [o.id, o.status, o.from, o.to, o.flight, o.fare.total])];
-      const csv = rows.map((r) => r.join(",")).join("\n");
-      const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([csv], { type: "text/csv" })); a.download = "apron-orders.csv"; a.click(); return;
+      exportCsv("apron-orders.csv", [["id", "status", "when", "vehicle", "from", "to", "flight", "driver", "total"], ...db.orders.map((o) => [o.id, o.status, o.when, o.vehicle, o.from, o.to, o.flight, o.driverId || "", o.fare.total])]);
+      return;
     }
-    if (name === "backup") { toast(t("toastSaved"), "ok"); return; }
+    if (name === "export-users") {
+      exportCsv("apron-users.csv", [["id", "name", "email", "phone", "spend", "balance", "frozen"], ...db.users.map((u) => [u.id, u.name, u.email, u.phone, u.spend, u.balance, u.frozen])]);
+      return;
+    }
+    if (name === "export-drv") {
+      exportCsv("apron-drivers.csv", [["id", "name", "level", "rating", "plate", "docs", "online"], ...db.drivers.map((d) => [d.id, d.name, d.level, d.rating, d.plate, d.docs, d.online])]);
+      return;
+    }
+    if (name === "export-pay") {
+      exportCsv("apron-payments.csv", [["id", "order", "channel", "kind", "status", "amount"], ...(db.payments || []).map((p) => [p.id, p.orderId, p.channel, p.kind, p.status, p.amount])]);
+      return;
+    }
+    if (name === "backup") {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(db, null, 2)], { type: "application/json" }));
+      a.download = "apron-backup.json";
+      a.click();
+      toast(t("toastSaved"), "ok");
+      return;
+    }
     if (name === "force") { ui.modal = { html: orderModal(ds.id) }; render(); return; }
   }
 
