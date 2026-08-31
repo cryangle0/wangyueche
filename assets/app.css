@@ -434,7 +434,60 @@ th { font-size: 11px; color: var(--mist); background: #faf7f1; }
 .pay-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .pay-opt { border: 1px solid var(--line); background: #fff; border-radius: 10px; padding: 10px; text-align: left; }
 .pay-opt.on { border-color: var(--navy); }
-.ccpa { font-size: 12px; line-height: 1.55; color: var(--slate); }
+.leaflet-map, .map-iframe {
+  width: 100%;
+  height: 220px;
+  border: 0;
+  display: block;
+  background: #dce4dc;
+}
+.map-attrib { margin: 6px 12px 0; font-size: 10px; color: var(--mist); }
+.map-pin {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  transform: translateY(4px);
+}
+.map-pin i {
+  width: 14px;
+  height: 14px;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  border: 2px solid #fff;
+  box-shadow: 0 2px 6px #0004;
+}
+.map-pin span {
+  margin-top: 4px;
+  background: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 6px;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px #0002;
+}
+.map-pin-a i { background: var(--navy); }
+.map-pin-b i { background: var(--amber); }
+.map-pin-car i, .map-pin-busy i, .map-pin-off i {
+  border-radius: 4px;
+  transform: none;
+  width: 16px;
+  height: 10px;
+}
+.map-pin-car i { background: var(--teal); }
+.map-pin-busy i { background: var(--coral); }
+.map-pin-off i { background: var(--mist); }
+.bubble { margin: 6px 0; padding: 8px 10px; background: var(--sand); border-radius: 10px; font-size: 13px; }
+.bubble.me { background: #1a274418; text-align: right; }
+.offer { border-color: var(--amber); background: #fff8e8; }
+.seg.wrap { flex-wrap: wrap; }
+.seg.wrap button { flex: 0 0 auto; padding: 0 8px; }
+.bars { display: flex; align-items: flex-end; gap: 8px; height: 72px; margin: 10px 0 6px; }
+.bars i { flex: 1; background: var(--navy); border-radius: 4px 4px 0 0; display: block; min-height: 4px; }
+.maplibregl-ctrl-top-right { top: 6px; right: 6px; }
+.maplibregl-ctrl button { width: 24px !important; height: 24px !important; }
+.modal .leaflet-map { height: 180px; border-radius: 12px; overflow: hidden; }
+.mini-scroll.map-mode .leaflet-map { border-radius: 0; }
 @media (max-width: 1100px) {
   .dash-grid { grid-template-columns: 1fr 1fr; }
   .admin { height: auto; min-height: calc(100vh - 92px); }
